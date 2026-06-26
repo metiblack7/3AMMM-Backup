@@ -352,12 +352,6 @@ function SongsTabComponent({ onOpenSong, scrollOffsetRef }: Props) {
   return (
     <View style={{ flex: 1, backgroundColor: C.bg, paddingTop: TOP_PADDING }}>
       {/* ── OFFLINE BAR ───────────────────────── */}
-      {!isOnline && (
-        <View style={[ns.offlineBar, { backgroundColor: C.danger }]}>
-          <Feather name="wifi-off" size={14} color="#fff" />
-          <Text style={ns.offlineText}>Offline mode – Using cached data</Text>
-        </View>
-      )}
 
       {/* ── SEARCH ────────────────────────────── */}
       <View
