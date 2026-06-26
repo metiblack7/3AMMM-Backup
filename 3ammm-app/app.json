@@ -2,7 +2,7 @@
   "expo": {
     "name": "Saba SDA Wolaitegna Songs Lyrics",
     "slug": "Saba",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/icon.png",
     "version": "1.0.0",
     "orientation": "portrait",
     "platforms": [
