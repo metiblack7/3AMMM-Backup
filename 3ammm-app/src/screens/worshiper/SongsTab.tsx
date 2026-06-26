@@ -49,6 +49,7 @@ function SongsTabComponent({ onOpenSong, scrollOffsetRef }: Props) {
   const { t } = useApp();
   const { C, isDark } = useTheme();
   const isOnline = useNetworkStatus();
+  const insets = useSafeAreaInsets();
 
   // ── Data ─────────────────────────────────────────────────────
   const [songs, setSongs] = useState<Song[]>([]);
@@ -66,6 +67,38 @@ function SongsTabComponent({ onOpenSong, scrollOffsetRef }: Props) {
   const pageShake = useRef(new Animated.Value(0)).current;
   const pageInputRef = useRef<TextInput>(null);
 
+  // ── Keyboard lift for floating search ────────────────────────
+  const keyboardLift = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const showEvent =
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent =
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+
+    const showSub = Keyboard.addListener(showEvent as any, (e: any) => {
+      const keyboardHeight = e?.endCoordinates?.height ?? 0;
+      Animated.timing(keyboardLift, {
+        toValue: -(keyboardHeight - 28),
+        duration: Platform.OS === "ios" ? 220 : 180,
+        useNativeDriver: true,
+      }).start();
+    });
+
+    const hideSub = Keyboard.addListener(hideEvent as any, () => {
+      Animated.timing(keyboardLift, {
+        toValue: 0,
+        duration: 180,
+        useNativeDriver: true,
+      }).start();
+    });
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, [keyboardLift]);
+
   // ── List ref ─────────────────────────────────────────────────
   const listRef = useRef<FlatList>(null);
   /**
@@ -78,6 +111,7 @@ function SongsTabComponent({ onOpenSong, scrollOffsetRef }: Props) {
   // ── Load ─────────────────────────────────────────────────────
   const load = useCallback(async () => {
     setError("");
+    setLoading(true);
     try {
       const [songsData, singersData] = await Promise.all([
         api.songs.getAll(),
@@ -121,9 +155,11 @@ function SongsTabComponent({ onOpenSong, scrollOffsetRef }: Props) {
           .map((l: any) => l.s || l.t || "")
           .join(" ")
           .toLowerCase();
+
         if (title.includes(lq) || lyrics.includes(lq)) return true;
         if (title.split(/\s+/).some((w) => w.startsWith(lq))) return true;
         if (lyrics.split(/\s+/).some((w) => w.startsWith(lq))) return true;
+
         let idx = 0;
         for (const ch of lq) {
           idx = title.indexOf(ch, idx);
@@ -150,15 +186,11 @@ function SongsTabComponent({ onOpenSong, scrollOffsetRef }: Props) {
   );
 
   // ── Scroll restore ───────────────────────────────────────────
-  // Fires once when data is loaded. Uses scrollToOffset (pixels) so it
-  // is instant and needs no getItemLayout approximation.
   useEffect(() => {
     if (loading || songs.length === 0 || restoredRef.current) return;
     restoredRef.current = true;
     const offset = scrollOffsetRef.current;
     if (offset > 0) {
-      // requestAnimationFrame gives the FlatList one paint cycle to render
-      // its items before we jump — avoids the flash-to-top artefact.
       requestAnimationFrame(() => {
         listRef.current?.scrollToOffset({ offset, animated: false });
       });
@@ -169,16 +201,10 @@ function SongsTabComponent({ onOpenSong, scrollOffsetRef }: Props) {
   const cardGradients = useCallback(
     (_category: string): [string, string] => {
       if (isDark) {
-        return [
-          "#082f41", // left side (deep blue-teal)
-          "#00121e", // right side (almost black navy)
-        ];
+        return ["#082f41", "#00121e"];
       }
 
-      return [
-        "#DFF5FF", // light mode left
-        "#F7FCFF", // light mode right
-      ];
+      return ["#DFF5FF", "#F7FCFF"];
     },
     [isDark],
   );
@@ -217,12 +243,14 @@ function SongsTabComponent({ onOpenSong, scrollOffsetRef }: Props) {
   const handlePageSearch = useCallback(() => {
     const num = parseInt(pageQuery.trim(), 10);
     const target = songsWithNumbers.find((s) => s.pageNumber === num);
+
     if (!target) {
       setPageError(true);
       shakeAnimation();
       setTimeout(() => setPageError(false), 2000);
       return;
     }
+
     setPageInputVisible(false);
     setPageQuery("");
     Keyboard.dismiss();
@@ -246,6 +274,7 @@ function SongsTabComponent({ onOpenSong, scrollOffsetRef }: Props) {
   const renderSongItem = useCallback(
     ({ item }: { item: NumberedSong }) => {
       const [g1, g2] = cardGradients(item.category);
+
       return (
         <TouchableOpacity
           style={ss.songCardWrap}
@@ -280,6 +309,7 @@ function SongsTabComponent({ onOpenSong, scrollOffsetRef }: Props) {
                   color={isDark ? C.sky : C.navy}
                 />
               </View>
+
               <View style={ss.songInfo}>
                 <Text style={[ss.songTitle, { color: C.text }]}>
                   {item.title}
@@ -288,6 +318,7 @@ function SongsTabComponent({ onOpenSong, scrollOffsetRef }: Props) {
                   {item.singerName}
                 </Text>
               </View>
+
               <Feather name="chevron-right" size={18} color={C.text3} />
             </View>
 
@@ -296,7 +327,6 @@ function SongsTabComponent({ onOpenSong, scrollOffsetRef }: Props) {
                 ss.songFooter,
                 { borderTopColor: isDark ? C.glassBorder : C.border },
               ]}>
-              {/* Global page number — stays the same regardless of singer filter */}
               <Text style={[ss.songNumber, { color: C.text3 }]}>
                 {item.pageNumber}
               </Text>
@@ -318,7 +348,6 @@ function SongsTabComponent({ onOpenSong, scrollOffsetRef }: Props) {
     [],
   );
 
-  const insets = useSafeAreaInsets();
   const TOP_PADDING = insets.top;
 
   // ── Early returns (after all hooks) ─────────────────────────
@@ -351,7 +380,6 @@ function SongsTabComponent({ onOpenSong, scrollOffsetRef }: Props) {
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg, paddingTop: TOP_PADDING }}>
-
       {/* ── SEARCH ────────────────────────────── */}
       <View
         style={{
@@ -455,7 +483,6 @@ function SongsTabComponent({ onOpenSong, scrollOffsetRef }: Props) {
         windowSize={10}
         initialNumToRender={8}
         getItemLayout={getItemLayout}
-        // Pixel-accurate scroll position tracking — written to a ref, zero re-renders
         onScroll={handleScroll}
         scrollEventThrottle={16}
         onScrollToIndexFailed={(info) => {
@@ -469,7 +496,14 @@ function SongsTabComponent({ onOpenSong, scrollOffsetRef }: Props) {
       />
 
       {/* ── FLOATING PAGE-NUMBER SEARCH ───────── */}
-      <View style={ps.fabArea} pointerEvents="box-none">
+      <Animated.View
+        style={[
+          ps.fabArea,
+          {
+            transform: [{ translateY: keyboardLift }],
+          },
+        ]}
+        pointerEvents="box-none">
         {pageInputVisible && (
           <Animated.View
             style={[
@@ -547,7 +581,7 @@ function SongsTabComponent({ onOpenSong, scrollOffsetRef }: Props) {
             />
           </LinearGradient>
         </TouchableOpacity>
-      </View>
+      </Animated.View>
     </View>
   );
 }
@@ -577,14 +611,24 @@ const ss = StyleSheet.create({
     }),
   },
   searchInput: { flex: 1, fontSize: 15, fontWeight: "500", paddingVertical: 0 },
-  pillsContent: { paddingHorizontal: Spacing.lg, gap: 8, paddingBottom: 4 },
+
+  pillsContent: {
+    paddingHorizontal: Spacing.lg,
+    gap: 8,
+    paddingBottom: 4,
+    alignItems: "center",
+  },
+
   pill: {
     borderRadius: 999,
     borderWidth: 1,
     overflow: "hidden",
     minHeight: 38,
     justifyContent: "center",
+    flexShrink: 0,
+    alignSelf: "flex-start",
   },
+
   pillGradient: {
     paddingHorizontal: 18,
     paddingVertical: 9,
@@ -592,19 +636,30 @@ const ss = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+
   pillText: {
     fontSize: 13,
     fontWeight: "600",
     paddingHorizontal: 18,
     paddingVertical: 9,
+    flexShrink: 0,
+    textAlign: "center",
   },
-  pillTextOn: { fontSize: 13, fontWeight: "700" },
+
+  pillTextOn: {
+    fontSize: 13,
+    fontWeight: "700",
+    flexShrink: 0,
+    textAlign: "center",
+  },
+
   listContent: {
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.sm,
-    paddingBottom: 120,
+    paddingBottom: 160,
     gap: Spacing.md,
   },
+
   songCardWrap: { borderRadius: 16, overflow: "hidden" },
   songCard: {
     borderRadius: 16,
@@ -663,21 +718,10 @@ const es = StyleSheet.create({
   retryText: { fontSize: 14, fontWeight: "700" },
 });
 
-const ns = StyleSheet.create({
-  offlineBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    paddingVertical: 8,
-  },
-  offlineText: { fontSize: 12, fontWeight: "600", color: "#fff" },
-});
-
 const ps = StyleSheet.create({
   fabArea: {
     position: "absolute",
-    bottom: 100,
+    bottom: 118,
     right: 20,
     alignItems: "flex-end",
     gap: 12,
@@ -689,13 +733,10 @@ const ps = StyleSheet.create({
     alignItems: "center",
     minWidth: 180,
     height: 54,
-
     borderRadius: 18,
     borderWidth: 1,
-
     paddingLeft: 16,
     paddingRight: 8,
-
     ...Platform.select({
       ios: {
         shadowOpacity: 0.18,
@@ -752,7 +793,6 @@ const ps = StyleSheet.create({
     borderRadius: 29,
     alignItems: "center",
     justifyContent: "center",
-
     ...Platform.select({
       ios: {
         shadowColor: "#000",
@@ -768,4 +808,15 @@ const ps = StyleSheet.create({
       },
     }),
   },
+});
+
+const ns = StyleSheet.create({
+  offlineBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 8,
+  },
+  offlineText: { fontSize: 12, fontWeight: "600", color: "#fff" },
 });

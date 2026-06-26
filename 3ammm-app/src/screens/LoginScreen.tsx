@@ -1,14 +1,17 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
   KeyboardAvoidingView,
+  Keyboard,
   Platform,
   StyleSheet,
   TextInput,
   StatusBar,
+  Animated,
+  Easing,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Feather } from "@expo/vector-icons";
@@ -29,6 +32,7 @@ function GlassField({
   keyboardType,
   autoCapitalize,
   colors,
+  onFocusScroll,
 }: {
   label: string;
   icon: string;
@@ -39,6 +43,7 @@ function GlassField({
   keyboardType?: any;
   autoCapitalize?: any;
   colors: typeof DarkColors;
+  onFocusScroll?: () => void;
 }) {
   const [focused, setFocused] = useState(false);
   const [revealed, setRevealed] = useState(false);
@@ -83,7 +88,10 @@ function GlassField({
           secureTextEntry={secureTextEntry && !revealed}
           keyboardType={keyboardType}
           autoCapitalize={autoCapitalize ?? "none"}
-          onFocus={() => setFocused(true)}
+          onFocus={() => {
+            setFocused(true);
+            onFocusScroll?.();
+          }}
           onBlur={() => setFocused(false)}
         />
         {secureTextEntry && (
@@ -168,6 +176,58 @@ export default function LoginScreen({
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const scrollRef = useRef<ScrollView>(null);
+  const keyboardLift = useRef(new Animated.Value(0)).current;
+  const cardLift = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const showEvent =
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent =
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+
+    const showSub = Keyboard.addListener(showEvent as any, (e: any) => {
+      const keyboardHeight = e?.endCoordinates?.height ?? 0;
+
+      Animated.parallel([
+        Animated.timing(keyboardLift, {
+          toValue: -(keyboardHeight * 0.34),
+          duration: Platform.OS === "ios" ? 240 : 180,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(cardLift, {
+          toValue: -24,
+          duration: Platform.OS === "ios" ? 240 : 180,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]).start();
+    });
+
+    const hideSub = Keyboard.addListener(hideEvent as any, () => {
+      Animated.parallel([
+        Animated.timing(keyboardLift, {
+          toValue: 0,
+          duration: 220,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(cardLift, {
+          toValue: 0,
+          duration: 220,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]).start();
+    });
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, [keyboardLift, cardLift]);
+
   async function handleLogin() {
     if (!email || !password) {
       setError(t.fillAll);
@@ -192,7 +252,6 @@ export default function LoginScreen({
         translucent
       />
 
-      {/* ── FULL SCREEN BACKGROUND — clean, no orbs ──── */}
       <LinearGradient
         colors={
           isDark
@@ -206,16 +265,22 @@ export default function LoginScreen({
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <ScrollView
-          style={{ flex: 1 }}
+        behavior="padding"
+        keyboardVerticalOffset={insets.top + 10}>
+        <Animated.ScrollView
+          ref={scrollRef}
+          style={{
+            flex: 1,
+            transform: [{ translateY: keyboardLift }],
+          }}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
           contentContainerStyle={[
             s.scrollContent,
             {
               paddingTop: insets.top + 16,
-              paddingBottom: Math.max(insets.bottom + 24, 40),
+              paddingBottom: Math.max(insets.bottom + 180, 220),
             },
           ]}>
           {/* ── LANG TOGGLE ──────────────────────────── */}
@@ -241,7 +306,6 @@ export default function LoginScreen({
 
           {/* ── HERO ─────────────────────────────────── */}
           <View style={s.hero}>
-            {/* Icon circle */}
             <View
               style={[
                 s.iconCircle,
@@ -255,7 +319,6 @@ export default function LoginScreen({
               <Feather name="music" size={30} color={C.sky} />
             </View>
 
-            {/* Wordmark */}
             <Text
               style={[
                 s.brand,
@@ -271,12 +334,10 @@ export default function LoginScreen({
               SABA
             </Text>
 
-            {/* Tagline */}
             <Text style={[s.tagline, { color: C.text2 }]}>
               Wolaitegna Songs Lyrics App
             </Text>
 
-            {/* Divider */}
             <LinearGradient
               colors={[
                 "transparent",
@@ -290,7 +351,7 @@ export default function LoginScreen({
           </View>
 
           {/* ── LOGIN CARD ───────────────────────────── */}
-          <View
+          <Animated.View
             style={[
               s.card,
               {
@@ -300,9 +361,9 @@ export default function LoginScreen({
                 borderColor: isDark
                   ? "rgba(135,206,235,0.12)"
                   : "rgba(4,57,84,0.10)",
+                transform: [{ translateY: cardLift }],
               },
             ]}>
-            {/* Card inner top sheen */}
             <LinearGradient
               colors={[
                 isDark ? "rgba(135,206,235,0.08)" : "rgba(255,255,255,1.00)",
@@ -326,7 +387,14 @@ export default function LoginScreen({
               placeholder="your@email.com"
               keyboardType="email-address"
               colors={C}
+              onFocusScroll={() => {
+                scrollRef.current?.scrollTo({
+                  y: 120,
+                  animated: true,
+                });
+              }}
             />
+
             <GlassField
               label={t.password}
               icon="lock"
@@ -335,9 +403,14 @@ export default function LoginScreen({
               placeholder="••••••••"
               secureTextEntry
               colors={C}
+              onFocusScroll={() => {
+                scrollRef.current?.scrollTo({
+                  y: 180,
+                  animated: true,
+                });
+              }}
             />
 
-            {/* Error */}
             {error ? (
               <View
                 style={[
@@ -352,7 +425,6 @@ export default function LoginScreen({
               </View>
             ) : null}
 
-            {/* Sign in button */}
             <TouchableOpacity
               style={[s.btnWrap, { opacity: loading ? 0.78 : 1 }]}
               onPress={handleLogin}
@@ -377,7 +449,6 @@ export default function LoginScreen({
               </LinearGradient>
             </TouchableOpacity>
 
-            {/* Switch to register */}
             <View style={s.switchRow}>
               <Text style={[s.switchText, { color: C.text3 }]}>{t.noAcc} </Text>
               <TouchableOpacity onPress={onGoRegister} activeOpacity={0.7}>
@@ -386,7 +457,7 @@ export default function LoginScreen({
                 </Text>
               </TouchableOpacity>
             </View>
-          </View>
+          </Animated.View>
 
           {/* ── FOOTER ───────────────────────────────── */}
           <View style={s.footer}>
@@ -396,7 +467,7 @@ export default function LoginScreen({
             </Text>
             <View style={[s.footerLine, { backgroundColor: C.border }]} />
           </View>
-        </ScrollView>
+        </Animated.ScrollView>
       </KeyboardAvoidingView>
     </View>
   );
@@ -411,7 +482,6 @@ const s = StyleSheet.create({
     paddingHorizontal: 24,
   },
 
-  // ── Top row ─────────────────────────────────────────
   topRow: {
     flexDirection: "row",
     justifyContent: "flex-end",
@@ -431,7 +501,6 @@ const s = StyleSheet.create({
     fontWeight: "700",
   },
 
-  // ── Hero ────────────────────────────────────────────
   hero: {
     alignItems: "center",
     paddingTop: 20,
@@ -465,7 +534,6 @@ const s = StyleSheet.create({
     borderRadius: 1,
   },
 
-  // ── Card ────────────────────────────────────────────
   card: {
     borderRadius: 24,
     borderWidth: 1,
@@ -502,7 +570,6 @@ const s = StyleSheet.create({
     marginBottom: 24,
   },
 
-  // ── Error ───────────────────────────────────────────
   errorWrap: {
     flexDirection: "row",
     alignItems: "center",
@@ -518,7 +585,6 @@ const s = StyleSheet.create({
     flex: 1,
   },
 
-  // ── Button ──────────────────────────────────────────
   btnWrap: {
     borderRadius: 16,
     overflow: "hidden",
@@ -559,7 +625,6 @@ const s = StyleSheet.create({
     letterSpacing: 0.6,
   },
 
-  // ── Switch ──────────────────────────────────────────
   switchRow: {
     flexDirection: "row",
     justifyContent: "center",
@@ -575,7 +640,6 @@ const s = StyleSheet.create({
     fontWeight: "700",
   },
 
-  // ── Footer ──────────────────────────────────────────
   footer: {
     flexDirection: "row",
     alignItems: "center",

@@ -6,11 +6,10 @@ import {
   StatusBar,
   TouchableOpacity,
   Animated,
-  Text,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
-import { FontAwesome5 } from "@expo/vector-icons"; // Unified to FontAwesome5
+import { FontAwesome5 } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../lib/useTheme";
 import { api } from "../lib/api";
@@ -22,13 +21,14 @@ import LyricsScreen, { Song } from "../screens/LyricsScreen";
 
 type WTab = "home" | "songs" | "setlists" | "favs" | "settings";
 
-// Modern, simple FontAwesome5 replacements
-const TABS: { key: WTab; icon: string }[] = [
+type TabIconName = React.ComponentProps<typeof FontAwesome5>["name"];
+
+const TABS: { key: WTab; icon: TabIconName }[] = [
   { key: "home", icon: "home" },
   { key: "songs", icon: "music" },
-  { key: "setlists", icon: "calendar-alt" }, // Clean calendar grid outline
+  { key: "setlists", icon: "calendar-alt" },
   { key: "favs", icon: "heart" },
-  { key: "settings", icon: "cog" }, // Clean mechanical gear icon
+  { key: "settings", icon: "cog" },
 ];
 
 const TAB_ICON_AREA = 62;
@@ -38,24 +38,20 @@ export default function WorshiperApp() {
   const { C, isDark } = useTheme();
   const insets = useSafeAreaInsets();
 
-  // ── State ───────────────────────────────────────────
   const [allSongs, setAllSongs] = useState<Song[]>([]);
   const [singers, setSingers] = useState<string[]>(["All"]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Active song
   const [activeSong, setActiveSong] = useState<Song | null>(null);
   const [activePageNumber, setActivePageNumber] = useState<number>(1);
   const songsScrollOffset = useRef(0);
 
-  // Tab switching
   const [activeTab, setActiveTab] = useState<WTab>("home");
   const tabOpacity = useRef(
     TABS.map((_, i) => new Animated.Value(i === 0 ? 1 : 0)),
   ).current;
 
-  // ── Load data ──────────────────────────────────────
   const loadSongs = useCallback(async () => {
     setError(null);
     setLoading(true);
@@ -67,7 +63,7 @@ export default function WorshiperApp() {
       setAllSongs(songsData);
       setSingers(["All", ...singersData]);
     } catch (err: any) {
-      setError(err.message || "Failed to load songs");
+      setError(err?.message || "Failed to load songs");
     } finally {
       setLoading(false);
     }
@@ -77,7 +73,6 @@ export default function WorshiperApp() {
     loadSongs();
   }, [loadSongs]);
 
-  // ── Open / close song ─────────────────────────────
   const openSong = useCallback(
     (song: Song) => {
       const index = allSongs.findIndex((s) => s._id === song._id);
@@ -97,32 +92,36 @@ export default function WorshiperApp() {
     [openSong],
   );
 
-  // ── Tab switching ──────────────────────────────────
   const handleTabPress = useCallback(
     (tab: WTab, index: number) => {
+      if (tab === activeTab) return;
+
       const prevIndex = TABS.findIndex((t) => t.key === activeTab);
-      Animated.parallel([
+      if (prevIndex !== -1) {
         Animated.timing(tabOpacity[prevIndex], {
           toValue: 0,
           duration: 150,
           useNativeDriver: true,
-        }),
-        Animated.timing(tabOpacity[index], {
-          toValue: 1,
-          duration: 200,
-          useNativeDriver: true,
-        }),
-      ]).start();
+        }).start();
+      }
+
+      Animated.timing(tabOpacity[index], {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }).start();
+
       setActiveTab(tab);
     },
     [activeTab, tabOpacity],
   );
 
-  // ── Styling tokens ─────────────────────────────────
   const pillGradient: [string, string] = isDark
     ? [C.glass, C.navyGlow]
     : [C.surface, C.bgDeep];
+
   const pillBorder = isDark ? C.glassBorder : C.border;
+
   const pillTopEdgeBg = isDark
     ? "rgba(255,255,255,0.20)"
     : "rgba(255,255,255,0.90)";
@@ -131,7 +130,6 @@ export default function WorshiperApp() {
   const contentBottomPad = tabBarHeight + TAB_BAR_MARGIN + 8;
   const tabBarBottom = TAB_BAR_MARGIN + insets.bottom;
 
-  // ── Render ─────────────────────────────────────────
   return (
     <View style={[styles.screen, { backgroundColor: C.bg }]}>
       <StatusBar
@@ -140,7 +138,6 @@ export default function WorshiperApp() {
         translucent
       />
 
-      {/* ── ALL TABS ─────────────────────────────────── */}
       <View style={[styles.content, { paddingBottom: contentBottomPad }]}>
         {TABS.map((tab, index) => (
           <Animated.View
@@ -153,12 +150,13 @@ export default function WorshiperApp() {
             {tab.key === "home" && (
               <HomeTab
                 onOpenSong={openSong}
-                onNavigateTab={(tab) => {
-                  const idx = TABS.findIndex((t) => t.key === tab);
-                  if (idx !== -1) handleTabPress(tab, idx);
+                onNavigateTab={(nextTab) => {
+                  const idx = TABS.findIndex((t) => t.key === nextTab);
+                  if (idx !== -1) handleTabPress(nextTab, idx);
                 }}
               />
             )}
+
             {tab.key === "songs" && (
               <SongsTab
                 songs={allSongs}
@@ -170,6 +168,7 @@ export default function WorshiperApp() {
                 scrollOffsetRef={songsScrollOffset}
               />
             )}
+
             {tab.key === "setlists" && <SetlistsTab onOpenSong={openSong} />}
             {tab.key === "favs" && <FavoritesTab onOpenSong={openSong} />}
             {tab.key === "settings" && <SettingsTab />}
@@ -177,39 +176,62 @@ export default function WorshiperApp() {
         ))}
       </View>
 
-      {/* ── FLOATING TAB BAR ────────────────────────── */}
       <View
         style={[styles.tabBarOuter, { bottom: tabBarBottom }]}
         pointerEvents="box-none">
         <View style={[styles.tabBarPill, { borderColor: pillBorder }]}>
-          <BlurView
-            intensity={isDark ? 35 : 50}
-            tint={isDark ? "dark" : "light"}
-            style={StyleSheet.absoluteFill}
-          />
+          <View style={StyleSheet.absoluteFill}>
+            <LinearGradient
+              colors={pillGradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 0, y: 1 }}
+              style={StyleSheet.absoluteFill}
+            />
+
+            <View
+              style={[
+                StyleSheet.absoluteFill,
+                {
+                  backgroundColor: isDark
+                    ? "rgba(3,10,18,0.40)"
+                    : "rgba(240,248,255,0.28)",
+                },
+              ]}
+            />
+          </View>
+
           <View
             style={[
               StyleSheet.absoluteFill,
               {
-                backgroundColor: isDark
-                  ? "rgba(3,10,18,0.55)"
-                  : "rgba(240,248,255,0.42)",
                 borderRadius: 32,
+                overflow: "hidden",
               },
+            ]}>
+            <BlurView
+              intensity={isDark ? 38 : 55}
+              tint={isDark ? "dark" : "light"}
+              // Android blur is experimental in Expo and needs this enabled.
+              experimentalBlurMethod={
+                Platform.OS === "android" ? "dimezisBlurView" : undefined
+              }
+              // Helps keep the Android result closer to iOS.
+              blurReductionFactor={4}
+              style={StyleSheet.absoluteFill}
+            />
+          </View>
+
+          <View
+            style={[
+              styles.pillTopEdge,
+              { backgroundColor: pillTopEdgeBg },
             ]}
           />
-          <LinearGradient
-            colors={pillGradient}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0, y: 1 }}
-            style={StyleSheet.absoluteFill}
-          />
-          <View
-            style={[styles.pillTopEdge, { backgroundColor: pillTopEdgeBg }]}
-          />
+
           <View style={styles.tabBarRow}>
             {TABS.map((tab, index) => {
               const isActive = activeTab === tab.key;
+
               return (
                 <TouchableOpacity
                   key={tab.key}
@@ -234,12 +256,9 @@ export default function WorshiperApp() {
                         style={[StyleSheet.absoluteFill, { borderRadius: 23 }]}
                       />
                       <View style={styles.activeWrapSheen} />
-
-                      {/* Switched to FontAwesome5 */}
                       <FontAwesome5 name={tab.icon} size={19} color="#010f18" />
                     </View>
                   ) : (
-                    /* Switched to FontAwesome5 */
                     <FontAwesome5 name={tab.icon} size={19} color="#7f919e" />
                   )}
                 </TouchableOpacity>
@@ -249,7 +268,6 @@ export default function WorshiperApp() {
         </View>
       </View>
 
-      {/* ── LYRICS OVERLAY ──────────────────────────── */}
       {activeSong && (
         <View style={styles.lyricsOverlay}>
           <LyricsScreen
@@ -265,7 +283,6 @@ export default function WorshiperApp() {
   );
 }
 
-// ── Styles ────────────────────────────────────────────
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   content: { flex: 1 },
