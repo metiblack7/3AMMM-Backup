@@ -14,14 +14,13 @@ import {
   PanResponder,
   LayoutChangeEvent,
 } from "react-native";
-// Swapped Feather for MaterialCommunityIcons for a more polished, premium look
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { FontAwesome5 } from "@expo/vector-icons";
 import { useApp } from "../../lib/AppContext";
 import { useTheme } from "../../lib/useTheme";
 import { apiFetch } from "../../lib/api";
 import { Spacing, Radius } from "../../theme";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { FontAwesome5 } from "@expo/vector-icons";
 
 // ── TOGGLE ───────────────────────────────────────────────────
 interface ToggleProps {
@@ -40,7 +39,7 @@ function Toggle({ value, onToggle, activeColor = "#87ceeb" }: ToggleProps) {
       friction: 8,
       useNativeDriver: true,
     }).start();
-  }, [value]);
+  }, [value, translateX]);
 
   const trackColor = translateX.interpolate({
     inputRange: [2, 22],
@@ -183,15 +182,14 @@ export function SettingsTab() {
     setLineSpacing,
     boldLyrics,
     setBoldLyrics,
-    theme,
     setTheme,
     signOut,
   } = useApp();
 
   const { isDark, C } = useTheme();
-
   const insets = useSafeAreaInsets();
   const TOP = insets.top;
+
   const PREVIEW = `ኪሊ ሳሉዋ ጋቲያ ጋዬ\nአሳ ናቱ ኡባ\nየሱሲ ኑ ዲኮ፣ ኤ ኢ ዲኮ`;
 
   const [feedbackText, setFeedbackText] = useState("");
@@ -205,28 +203,28 @@ export function SettingsTab() {
 
   const handleSignOut = useCallback(() => {
     Alert.alert(
-      "Sign Out",
-      "Are you sure you want to sign out?",
+      t.signOutTitle,
+      t.confirmSignOut,
       [
-        { text: "Cancel", style: "cancel" },
+        { text: t.cancel, style: "cancel" },
         {
-          text: "Sign Out",
+          text: t.logout,
           style: "destructive",
           onPress: () => {
             signOut().catch((err: any) => {
               console.error("[SignOut] Error:", err);
-              Alert.alert("Error", "Could not sign out. Please try again.");
+              Alert.alert(t.error, t.couldNotSignOut);
             });
           },
         },
       ],
       { cancelable: true },
     );
-  }, [signOut]);
+  }, [signOut, t]);
 
   const handleFeedbackSubmit = useCallback(async () => {
     if (!feedbackText.trim()) {
-      Alert.alert("Empty Feedback", "Please write a message first.");
+      Alert.alert(t.emptyFeedbackTitle, t.writeMessageFirst);
       return;
     }
 
@@ -239,22 +237,19 @@ export function SettingsTab() {
         await Linking.openURL(telegramUrl);
         setFeedbackText("");
       } else {
-        Alert.alert(
-          "Error",
-          "Could not open Telegram. Make sure the app is installed.",
-        );
+        Alert.alert(t.error, t.telegramOpenError);
       }
     } catch {
-      Alert.alert("Error", "Failed to launch Telegram.");
+      Alert.alert(t.error, t.telegramLaunchError);
     }
-  }, [feedbackText]);
+  }, [feedbackText, t]);
 
   const handleCheckForUpdates = useCallback(() => {
     Alert.alert(
-      "Up to Date",
-      `You are running version ${appVersion} — the latest version.`,
+      t.upToDate,
+      `${t.runningVersion} ${appVersion} — ${t.latestVersion}`,
     );
-  }, [appVersion]);
+  }, [appVersion, t]);
 
   const openUrl = useCallback(async (url: string) => {
     try {
@@ -265,7 +260,6 @@ export function SettingsTab() {
     }
   }, []);
 
-  // ── Inline style helpers ───────────────────────────────────
   const card: any = {
     backgroundColor: C.surface,
     borderRadius: Radius.md,
@@ -304,20 +298,19 @@ export function SettingsTab() {
         paddingBottom: 120,
       }}>
       {/* ── APPEARANCE ──────────────────────────── */}
-      <Text style={sectionTitle}>{t.appearance ?? "Appearance"}</Text>
+      <Text style={sectionTitle}>{t.appearance}</Text>
       <View style={card}>
         <View style={s.rowBetween}>
           <View style={s.rowLeft}>
-            {/* Swapped to matching modern filled theme icons */}
             <MaterialCommunityIcons
               name={isDark ? "weather-night" : "weather-sunny"}
               size={20}
               color={C.sky}
             />
             <View>
-              <Text style={rowLabel}>{t.theme ?? "Theme"}</Text>
+              <Text style={rowLabel}>{t.theme}</Text>
               <Text style={[s.subLabel, { color: C.text3 }]}>
-                {isDark ? "Dark mode" : "Light mode"}
+                {isDark ? t.darkMode : t.lightMode}
               </Text>
             </View>
           </View>
@@ -331,13 +324,12 @@ export function SettingsTab() {
 
         <View style={[s.rowBetween, { marginTop: Spacing.md }]}>
           <View style={s.rowLeft}>
-            {/* Specific format-size layout icon */}
             <MaterialCommunityIcons
               name="format-size"
               size={20}
               color={C.sky}
             />
-            <Text style={rowLabel}>{t.fontSize ?? "Font Size"}</Text>
+            <Text style={rowLabel}>{t.fontSize}</Text>
           </View>
           <View
             style={[
@@ -351,6 +343,7 @@ export function SettingsTab() {
             </Text>
           </View>
         </View>
+
         <PrecisionSlider
           value={fontSize}
           onValueChange={setFontSize}
@@ -368,7 +361,7 @@ export function SettingsTab() {
               borderLeftColor: C.sky,
             },
           ]}>
-          <Text style={[s.previewMeta, { color: C.text3 }]}>Preview</Text>
+          <Text style={[s.previewMeta, { color: C.text3 }]}>{t.preview}</Text>
           <Text
             style={{
               color: C.text,
@@ -383,17 +376,16 @@ export function SettingsTab() {
       </View>
 
       {/* ── TEXT DISPLAY ────────────────────────── */}
-      <Text style={sectionTitle}>{t.textDisplay ?? "Text Display"}</Text>
+      <Text style={sectionTitle}>{t.textDisplay}</Text>
       <View style={card}>
         <View style={s.rowBetween}>
           <View style={s.rowLeft}>
-            {/* Perfect replacement for precise line height spacing control */}
             <MaterialCommunityIcons
               name="format-line-spacing"
               size={20}
               color={C.sky}
             />
-            <Text style={rowLabel}>{t.lineSpacing ?? "Line Spacing"}</Text>
+            <Text style={rowLabel}>{t.lineSpacing}</Text>
           </View>
           <View
             style={[
@@ -407,6 +399,7 @@ export function SettingsTab() {
             </Text>
           </View>
         </View>
+
         <PrecisionSlider
           value={lineSpacing}
           onValueChange={setLineSpacing}
@@ -420,25 +413,20 @@ export function SettingsTab() {
 
         <View style={[s.rowBetween, { marginTop: Spacing.md }]}>
           <View style={s.rowLeft}>
-            {/* Native formatting bold icon */}
-            <MaterialCommunityIcons
-              name="format-bold"
-              size={20}
-              color={C.sky}
-            />
-            <Text style={rowLabel}>{t.boldLyrics ?? "Bold Lyrics"}</Text>
+            <MaterialCommunityIcons name="format-bold" size={20} color={C.sky} />
+            <Text style={rowLabel}>{t.boldLyrics}</Text>
           </View>
           <Toggle value={boldLyrics} onToggle={setBoldLyrics} />
         </View>
       </View>
 
       {/* ── LANGUAGE ────────────────────────────── */}
-      <Text style={sectionTitle}>{t.language ?? "Language"}</Text>
+      <Text style={sectionTitle}>{t.language}</Text>
       <View style={card}>
         <View style={s.pillRow}>
           {[
-            { key: "en", label: "🇬🇧 English" },
-            { key: "am", label: "🇪🇹 አማርኛ" },
+            { key: "en", label: t.english },
+            { key: "am", label: t.amharic },
           ].map((item) => {
             const active = lang === item.key;
             return (
@@ -466,7 +454,7 @@ export function SettingsTab() {
       </View>
 
       {/* ── FEEDBACK ────────────────────────────── */}
-      <Text style={sectionTitle}>Feedback & Comments</Text>
+      <Text style={sectionTitle}>{t.feedbackComments}</Text>
       <View style={card}>
         <View style={[s.rowLeft, { marginBottom: Spacing.md }]}>
           <MaterialCommunityIcons
@@ -474,7 +462,7 @@ export function SettingsTab() {
             size={19}
             color={C.sky}
           />
-          <Text style={rowLabel}>Share your thoughts</Text>
+          <Text style={rowLabel}>{t.shareThoughts}</Text>
         </View>
 
         <TextInput
@@ -486,7 +474,7 @@ export function SettingsTab() {
               backgroundColor: C.bgDeep,
             },
           ]}
-          placeholder="Write your feedback here..."
+          placeholder={t.writeFeedback}
           placeholderTextColor={C.text3}
           value={feedbackText}
           onChangeText={setFeedbackText}
@@ -506,7 +494,7 @@ export function SettingsTab() {
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
             <FontAwesome5 name="telegram" size={24} color="black" />
             <Text style={[s.ctaBtnText, { color: C.bg }]}>
-              Send via Telegram
+              {t.sendViaTelegram}
             </Text>
           </View>
         </TouchableOpacity>
@@ -525,7 +513,7 @@ export function SettingsTab() {
           activeOpacity={0.7}>
           <View style={s.rowLeft}>
             <MaterialCommunityIcons name="web" size={20} color={C.sky} />
-            <Text style={rowLabel}>Visit Website</Text>
+            <Text style={rowLabel}>{t.visitWebsite}</Text>
           </View>
           <MaterialCommunityIcons
             name="open-in-new"
@@ -542,8 +530,9 @@ export function SettingsTab() {
             s.subLabel,
             { color: C.text3, marginTop: Spacing.md, marginBottom: Spacing.md },
           ]}>
-          Follow Us
+          {t.followUs}
         </Text>
+
         <View style={s.socialRow}>
           {[
             {
@@ -553,17 +542,17 @@ export function SettingsTab() {
             },
             {
               name: "Instagram",
-              icon: "instagram", // Fixed typo here
+              icon: "instagram",
               url: "https://instagram.com/3ammm7",
             },
             {
               name: "TikTok",
-              icon: "tiktok", // FA5 supports TikTok natively, no fallback needed
+              icon: "tiktok",
               url: "https://tiktok.com/@3ammm7",
             },
             {
               name: "Telegram",
-              icon: "telegram-plane", // 'telegram-plane' is the clean paper-plane logo in FA5
+              icon: "telegram-plane",
               url: "https://t.me/ThreeAMM",
             },
           ].map((social) => (
@@ -578,32 +567,31 @@ export function SettingsTab() {
               ]}
               onPress={() => openUrl(social.url)}
               activeOpacity={0.7}>
-              {/* Make sure FontAwesome5 is imported at the top of your file! */}
-              <FontAwesome5 name={social.icon} size={22} color={C.sky} />
+              <FontAwesome5 name={social.icon as any} size={22} color={C.sky} />
             </TouchableOpacity>
           ))}
         </View>
       </View>
 
       {/* ── CONTACT ─────────────────────────────── */}
-      <Text style={sectionTitle}>Contact Us</Text>
+      <Text style={sectionTitle}>{t.contactUs}</Text>
       <View style={card}>
         {[
           {
-            icon: "envelope", // FontAwesome5 envelope icon
-            label: "Email",
+            icon: "envelope",
+            label: t.email,
             sub: "3ammministry@gmail.com",
             url: "mailto:3ammministry@gmail.com",
           },
           {
-            icon: "phone", // FontAwesome5 phone icon
-            label: "3AMMM Office",
+            icon: "phone",
+            label: `3AMMM ${t.office}`,
             sub: "0937 555 577",
             url: "tel:+251937555577",
           },
           {
-            icon: "telegram-plane", // FontAwesome5 Telegram icon
-            label: "Telegram",
+            icon: "telegram-plane",
+            label: t.telegram,
             sub: "@Threeammm7",
             url: "https://t.me/Threeammm7",
           },
@@ -614,12 +602,11 @@ export function SettingsTab() {
               onPress={() => openUrl(item.url)}
               activeOpacity={0.7}>
               <View style={s.rowLeft}>
-                {/* Unified to FontAwesome5 */}
                 <FontAwesome5
                   name={item.icon as any}
                   size={18}
                   color={C.sky}
-                  style={{ width: 22, textAlign: "center" }} // Keeps icons perfectly aligned vertically
+                  style={{ width: 22, textAlign: "center" }}
                 />
 
                 <View style={{ marginLeft: 8 }}>
@@ -630,9 +617,9 @@ export function SettingsTab() {
                 </View>
               </View>
 
-              {/* Chevron arrow also converted to FontAwesome5 */}
               <FontAwesome5 name="chevron-right" size={16} color={C.text3} />
             </TouchableOpacity>
+
             {i < arr.length - 1 && (
               <View style={[s.divider, { backgroundColor: C.border }]} />
             )}
@@ -641,7 +628,7 @@ export function SettingsTab() {
       </View>
 
       {/* ── APP UPDATES ─────────────────────────── */}
-      <Text style={sectionTitle}>App Updates</Text>
+      <Text style={sectionTitle}>{t.appUpdates}</Text>
       <View style={card}>
         <TouchableOpacity
           style={[s.rowBetween, { paddingVertical: Spacing.sm }]}
@@ -654,10 +641,8 @@ export function SettingsTab() {
               color={C.sky}
             />
             <View>
-              <Text style={rowLabel}>Check for Updates</Text>
-              <Text style={[s.subLabel, { color: C.text3 }]}>
-                v{appVersion}
-              </Text>
+              <Text style={rowLabel}>{t.checkForUpdates}</Text>
+              <Text style={[s.subLabel, { color: C.text3 }]}>v{appVersion}</Text>
             </View>
           </View>
           <MaterialCommunityIcons
@@ -669,7 +654,7 @@ export function SettingsTab() {
       </View>
 
       {/* ── ACCOUNT ─────────────────────────────── */}
-      <Text style={sectionTitle}>{t.account ?? "Account"}</Text>
+      <Text style={sectionTitle}>{t.account}</Text>
       <View style={card}>
         <TouchableOpacity
           style={[
@@ -682,18 +667,14 @@ export function SettingsTab() {
           onPress={handleSignOut}
           activeOpacity={0.8}>
           <MaterialCommunityIcons name="logout" size={18} color={C.danger} />
-          <Text style={[s.logoutText, { color: C.danger }]}>
-            {t.logout ?? "Sign out"}
-          </Text>
+          <Text style={[s.logoutText, { color: C.danger }]}>{t.logout}</Text>
         </TouchableOpacity>
       </View>
 
       {/* ── FOOTER ──────────────────────────────── */}
       <View style={s.footer}>
         <View style={[s.footerLine, { backgroundColor: C.border }]} />
-        <Text style={[s.footerText, { color: C.text3 }]}>
-          Developed by 3AMMM Media and Communication Dep't
-        </Text>
+        <Text style={[s.footerText, { color: C.text3 }]}>{t.credit}</Text>
         <View style={[s.footerLine, { backgroundColor: C.border }]} />
       </View>
     </ScrollView>

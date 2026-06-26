@@ -351,7 +351,6 @@ function SongsTabComponent({ onOpenSong, scrollOffsetRef }: Props) {
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg, paddingTop: TOP_PADDING }}>
-      {/* ── OFFLINE BAR ───────────────────────── */}
 
       {/* ── SEARCH ────────────────────────────── */}
       <View
