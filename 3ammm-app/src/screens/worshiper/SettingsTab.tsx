@@ -538,12 +538,12 @@ export function SettingsTab() {
             {
               name: "Facebook",
               icon: "facebook",
-              url: "https://facebook.com/3ammm7",
+              url: "https://facebook.com/@3ammm7",
             },
             {
               name: "Instagram",
               icon: "instagram",
-              url: "https://instagram.com/3ammm7",
+              url: "https://instagram.com/@3ammm7",
             },
             {
               name: "TikTok",
