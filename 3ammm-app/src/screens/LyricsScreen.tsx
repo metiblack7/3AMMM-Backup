@@ -194,6 +194,7 @@ export default function LyricsScreen({
     setLineSpacing,
     boldLyrics,
     setBoldLyrics,
+    t,
   } = useApp();
   const { C, isDark } = useTheme();
   const insets = useSafeAreaInsets();
@@ -210,6 +211,8 @@ export default function LyricsScreen({
   const adjustAnim = useRef(new Animated.Value(0)).current;
   const fabOpacity = useRef(new Animated.Value(1)).current;
   const pageShake = useRef(new Animated.Value(0)).current;
+  const keyboardLift = useRef(new Animated.Value(0)).current;
+
   const scrollRef = useRef<ScrollView>(null);
   const pageInputRef = useRef<TextInput>(null);
   const scrollTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
@@ -284,35 +287,73 @@ export default function LyricsScreen({
       .catch(() => {});
   }, [song?._id, isAuthenticated]);
 
+  const closeAdjustPanel = useCallback(() => {
+    Animated.timing(adjustAnim, {
+      toValue: 0,
+      duration: 180,
+      useNativeDriver: true,
+    }).start(() => setAdjustOpen(false));
+  }, [adjustAnim]);
+
   useEffect(() => {
     const sub = BackHandler.addEventListener("hardwareBackPress", () => {
       if (pageInputVisible) {
-        useEffect(() => {
-          setPageInputVisible(false);
-          setPageQuery("");
-          setPageError(false);
-        }, [song?._id]);
+        setPageInputVisible(false);
+        setPageQuery("");
         setPageError(false);
         Keyboard.dismiss();
         return true;
       }
+
       if (adjustOpen) {
         closeAdjustPanel();
         return true;
       }
+
       onBack();
       return true;
     });
+
     return () => sub.remove();
-  }, [onBack, adjustOpen, pageInputVisible]);
+  }, [onBack, adjustOpen, pageInputVisible, closeAdjustPanel]);
 
   useEffect(() => {
     if (!pageInputVisible) return;
-    const t = setTimeout(() => {
+    const tmr = setTimeout(() => {
       pageInputRef.current?.focus();
     }, 120);
-    return () => clearTimeout(t);
+    return () => clearTimeout(tmr);
   }, [pageInputVisible]);
+
+  useEffect(() => {
+    const showEvent =
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent =
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+
+    const showSub = Keyboard.addListener(showEvent as any, (e: any) => {
+      const keyboardHeight = e?.endCoordinates?.height ?? 0;
+
+      Animated.timing(keyboardLift, {
+        toValue: -keyboardHeight,
+        duration: Platform.OS === "ios" ? 220 : 180,
+        useNativeDriver: true,
+      }).start();
+    });
+
+    const hideSub = Keyboard.addListener(hideEvent as any, () => {
+      Animated.timing(keyboardLift, {
+        toValue: 0,
+        duration: 180,
+        useNativeDriver: true,
+      }).start();
+    });
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, [keyboardLift]);
 
   const showFabs = useCallback(() => {
     clearTimeout(scrollTimer.current);
@@ -356,13 +397,15 @@ export default function LyricsScreen({
       await Share.share({
         message: `🎵 ${song.title}\n🎤 ${song.singerName}\n🎼 Key of ${song.key}\n\n${song.lyrics
           .map((l) => l.t)
-          .join("\n\n")}\n\nShared from 3AMMM Worship App`,
+          .join("\n\n")}\n\n${
+          t.sharedFromApp ?? "Shared from 3AMMM Worship App"
+        }`,
         title: song.title,
       });
     } catch {
       /* silent */
     }
-  }, [song]);
+  }, [song, t]);
 
   const openAdjustPanel = useCallback(() => {
     setAdjustOpen(true);
@@ -372,14 +415,6 @@ export default function LyricsScreen({
       damping: 18,
       stiffness: 180,
     }).start();
-  }, [adjustAnim]);
-
-  const closeAdjustPanel = useCallback(() => {
-    Animated.timing(adjustAnim, {
-      toValue: 0,
-      duration: 180,
-      useNativeDriver: true,
-    }).start(() => setAdjustOpen(false));
   }, [adjustAnim]);
 
   const togglePageInput = useCallback(() => {
@@ -392,7 +427,7 @@ export default function LyricsScreen({
       return;
     }
 
-    setPageQuery(""); // always start empty
+    setPageQuery("");
     setPageInputVisible(true);
   }, [pageInputVisible]);
 
@@ -442,7 +477,7 @@ export default function LyricsScreen({
     }
 
     setPageError(false);
-    setPageQuery(""); // clear input
+    setPageQuery("");
     setPageInputVisible(false);
     Keyboard.dismiss();
 
@@ -458,7 +493,9 @@ export default function LyricsScreen({
           alignItems: "center",
           backgroundColor: C.bg,
         }}>
-        <Text style={{ color: C.text, fontSize: 16 }}>Loading...</Text>
+        <Text style={{ color: C.text, fontSize: 16 }}>
+          {t.loading ?? "Loading..."}
+        </Text>
       </View>
     );
   }
@@ -696,7 +733,7 @@ export default function LyricsScreen({
               <View style={s.adjustLeft}>
                 <Feather name="type" size={13} color={C.sky} />
                 <Text style={[s.adjustLabel, { color: C.text2 }]}>
-                  Font Size
+                  {t.fontSize ?? "Font Size"}
                 </Text>
               </View>
               <Text style={[s.adjustVal, { color: C.sky }]}>
@@ -715,7 +752,9 @@ export default function LyricsScreen({
             <View style={[s.adjustRow, { marginTop: 12 }]}>
               <View style={s.adjustLeft}>
                 <Feather name="align-left" size={13} color={C.sky} />
-                <Text style={[s.adjustLabel, { color: C.text2 }]}>Spacing</Text>
+                <Text style={[s.adjustLabel, { color: C.text2 }]}>
+                  {t.lineSpacing ?? "Line Spacing"}
+                </Text>
               </View>
               <Text style={[s.adjustVal, { color: C.sky }]}>
                 {lineSpacing.toFixed(1)}×
@@ -736,7 +775,7 @@ export default function LyricsScreen({
               <View style={s.adjustLeft}>
                 <Feather name="bold" size={13} color={C.sky} />
                 <Text style={[s.adjustLabel, { color: C.text2 }]}>
-                  Bold Lyrics
+                  {t.boldLyrics ?? "Bold Lyrics"}
                 </Text>
               </View>
               <Switch
@@ -789,6 +828,7 @@ export default function LyricsScreen({
             {
               opacity: fabOpacity,
               bottom: Platform.OS === "ios" ? 110 : 90,
+              transform: [{ translateY: keyboardLift }],
             },
           ]}
           pointerEvents="box-none">
@@ -816,7 +856,9 @@ export default function LyricsScreen({
                   setPageQuery(v.replace(/[^0-9]/g, ""));
                   setPageError(false);
                 }}
-                placeholder={`1-${allSongs.length}`}
+                placeholder={
+                  t.songNumberPlaceholder ?? `1-${allSongs.length || 0}`
+                }
                 placeholderTextColor={C.text3}
                 keyboardType="number-pad"
                 returnKeyType="go"
@@ -835,7 +877,9 @@ export default function LyricsScreen({
                     pageStyles.errorBubble,
                     { backgroundColor: C.danger },
                   ]}>
-                  <Text style={pageStyles.errorBubbleText}>Song not found</Text>
+                  <Text style={pageStyles.errorBubbleText}>
+                    {t.songNotFound ?? "Song not found"}
+                  </Text>
                 </View>
               )}
             </Animated.View>

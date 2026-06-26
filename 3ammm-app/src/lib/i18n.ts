@@ -76,6 +76,7 @@ const translations = {
     editSetlist: "Edit setlist",
 
     // Lyrics
+    back: "Back",
     keyOf: "Key",
     savedFav: "Saved to favorites",
     removeFav: "Remove from favorites",
@@ -192,6 +193,8 @@ const translations = {
     myFavs: "ተወዳጆቼ",
 
     // Songs
+  
+back: "ተመለስ",
     search: "መዝሙር ይፈልጉ...",
     addSong: "አዲስ መዝሙር ይጨምሩ",
     editSong: "መዝሙር ያርሙ",

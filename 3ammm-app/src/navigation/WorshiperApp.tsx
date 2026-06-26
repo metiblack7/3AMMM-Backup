@@ -170,7 +170,13 @@ export default function WorshiperApp() {
             )}
 
             {tab.key === "setlists" && <SetlistsTab onOpenSong={openSong} />}
-            {tab.key === "favs" && <FavoritesTab onOpenSong={openSong} />}
+          {tab.key === "favs" && (
+  <FavoritesTab
+    onOpenSong={openSong}
+    onBackToSongs={() => handleTabPress("songs", 1)}
+    allSongs={allSongs}
+  />
+)}
             {tab.key === "settings" && <SettingsTab />}
           </Animated.View>
         ))}

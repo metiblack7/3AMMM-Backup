@@ -24,6 +24,7 @@ interface Setlist {
   date: string;
   songIds: Song[];
 }
+
 interface Notif {
   _id: string;
   title: string;
@@ -32,8 +33,11 @@ interface Notif {
   createdAt: string;
 }
 
+type FavoriteSong = Song;
+
 interface SongProps {
   onOpenSong: (song: Song) => void;
+  onBackToSongs?: () => void;
 }
 
 // ── SETLISTS TAB ──────────────────────────────────────────────
@@ -69,7 +73,6 @@ function SetlistsTabComponent({ onOpenSong }: SongProps) {
   const TOP_PADDING =
     Platform.OS === "ios" ? 50 : (StatusBar.currentHeight ?? 24) + 8;
 
-  // Token-driven gradient — no hardcoded hex
   const cardGradient: [string, string, string] = isDark
     ? [C.surfaceHigh, C.surface, C.bg]
     : [C.surface, C.bgDeep, C.bg];
@@ -82,7 +85,6 @@ function SetlistsTabComponent({ onOpenSong }: SongProps) {
         <RefreshControl
           refreshing={refreshing}
           onRefresh={onRefresh}
-          // ✅ sky — pull-to-refresh is not a CTA
           tintColor={C.sky}
         />
       }>
@@ -107,7 +109,6 @@ function SetlistsTabComponent({ onOpenSong }: SongProps) {
                   styles.card,
                   {
                     borderColor: isDark ? C.glassBorder : C.border,
-                    // ✅ sky shadow — brand-consistent
                     ...Platform.select({
                       ios: { shadowColor: C.sky },
                       android: {},
@@ -119,7 +120,6 @@ function SetlistsTabComponent({ onOpenSong }: SongProps) {
                     styles.cardHdr,
                     { borderBottomColor: isDark ? C.glassBorder : C.border },
                   ]}>
-                  {/* ✅ skyPale bg + sky text for date badge — informational */}
                   <View
                     style={[
                       styles.dateBadge,
@@ -140,7 +140,6 @@ function SetlistsTabComponent({ onOpenSong }: SongProps) {
                     {sl.title}
                   </Text>
 
-                  {/* ✅ skyMid bg + sky text for count badge */}
                   <View
                     style={[
                       styles.songCountBadge,
@@ -166,7 +165,6 @@ function SetlistsTabComponent({ onOpenSong }: SongProps) {
                     ]}
                     onPress={() => onOpenSong(song)}
                     activeOpacity={0.7}>
-                    {/* ✅ sky for list numbers — structural/informational */}
                     <Text style={[styles.songNum, { color: C.sky }]}>
                       {i + 1}
                     </Text>
@@ -183,7 +181,6 @@ function SetlistsTabComponent({ onOpenSong }: SongProps) {
                       {song.singerName}
                     </Text>
 
-                    {/* ✅ goldDeep bg + gold text for key chip — subtle badge */}
                     <View
                       style={[styles.keyChip, { backgroundColor: C.goldDeep }]}>
                       <Text style={[styles.keyChipText, { color: C.gold }]}>
@@ -206,16 +203,26 @@ function SetlistsTabComponent({ onOpenSong }: SongProps) {
 export const SetlistsTab = React.memo(SetlistsTabComponent);
 
 // ── FAVORITES TAB ─────────────────────────────────────────────
-function FavoritesTabComponent({ onOpenSong }: SongProps) {
+type FavoriteProps = {
+  onOpenSong: (song: Song) => void;
+  onBackToSongs?: () => void;
+  allSongs: Song[];
+};
+
+function FavoritesTabComponent({
+  onOpenSong,
+  onBackToSongs,
+  allSongs,
+}: FavoriteProps) {
   const { t } = useApp();
   const { C, isDark } = useTheme();
-  const [songs, setSongs] = useState<Song[]>([]);
+  const [songs, setSongs] = useState<FavoriteSong[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      setSongs(await api.favorites.getAll());
+      setSongs((await api.favorites.getAll()) as FavoriteSong[]);
     } catch (err) {
       console.error(err);
     } finally {
@@ -233,6 +240,15 @@ function FavoritesTabComponent({ onOpenSong }: SongProps) {
     setRefreshing(false);
   }, [load]);
 
+  const getPageNumber = useCallback(
+    (song: FavoriteSong, index: number) => {
+      const matchIndex = allSongs.findIndex((s) => s._id === song._id);
+      if (matchIndex !== -1) return matchIndex + 1;
+      return index + 1;
+    },
+    [allSongs],
+  );
+
   if (loading) return <Loader />;
 
   const TOP_PADDING =
@@ -243,95 +259,152 @@ function FavoritesTabComponent({ onOpenSong }: SongProps) {
     : [C.surface, C.bgDeep, C.bg];
 
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: C.bg, paddingTop: TOP_PADDING }}
-      showsVerticalScrollIndicator={false}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-          tintColor={C.sky}
-        />
-      }>
-      {songs.length === 0 ? (
-        <EmptyState
-          icon={<Feather name="heart" size={24} color={C.sky} />}
-          text={t.noFavs}
-        />
-      ) : (
-        <View
-          style={{
-            paddingHorizontal: Spacing.lg,
-            paddingVertical: Spacing.md,
-            gap: Spacing.md,
-          }}>
-          {songs.map((song) => (
-            <TouchableOpacity
-              key={song._id}
-              style={styles.favCardWrap}
-              onPress={() => onOpenSong(song)}
-              activeOpacity={0.7}>
-              <LinearGradient
-                colors={favGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={[
-                  styles.favCard,
-                  {
-                    borderColor: isDark ? C.glassBorder : C.border,
-                    ...Platform.select({
-                      ios: { shadowColor: isDark ? C.sky : C.navy },
-                      android: {},
-                    }),
-                  },
-                ]}>
-                <View style={styles.favHeader}>
-                  {/* ✅ sky icon box — heart is brand/emotional, not a CTA */}
-                  <View
+    <View style={{ flex: 1, backgroundColor: C.bg }}>
+      <View
+        style={[
+          styles.favHeaderBar,
+          {
+            paddingTop: TOP_PADDING,
+            backgroundColor: C.bg,
+            borderBottomColor: isDark ? C.glassBorder : C.border,
+          },
+        ]}>
+        <TouchableOpacity
+          activeOpacity={0.75}
+          onPress={onBackToSongs}
+          disabled={!onBackToSongs}
+          accessibilityRole="button"
+          accessibilityLabel={t.songs}
+          style={[
+            styles.backButton,
+            {
+              backgroundColor: isDark ? C.navyLight : C.surface,
+              borderColor: isDark ? C.glassBorder : C.border,
+              opacity: onBackToSongs ? 1 : 0.5,
+            },
+          ]}>
+          <Feather name="chevron-left" size={22} color={C.sky} />
+        </TouchableOpacity>
+
+        <Text style={[styles.favHeaderTitle, { color: C.text }]}>
+          {t.favs}
+        </Text>
+
+        <View style={styles.headerRightSpace} />
+      </View>
+
+      <ScrollView
+        style={{ flex: 1, backgroundColor: C.bg }}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={C.sky}
+          />
+        }>
+        {songs.length === 0 ? (
+          <EmptyState
+            icon={<Feather name="heart" size={24} color={C.sky} />}
+            text={t.noFavs}
+          />
+        ) : (
+          <View
+            style={{
+              paddingHorizontal: Spacing.lg,
+              paddingVertical: Spacing.md,
+              gap: Spacing.md,
+            }}>
+            {songs.map((song, index) => {
+              const pageNumber = getPageNumber(song, index);
+
+              return (
+                <TouchableOpacity
+                  key={song._id}
+                  style={styles.favCardWrap}
+                  onPress={() => onOpenSong(song)}
+                  activeOpacity={0.7}>
+                  <LinearGradient
+                    colors={favGradient}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
                     style={[
-                      styles.favIcon,
+                      styles.favCard,
                       {
-                        backgroundColor: isDark ? C.skyGlowSoft : C.skyPale,
-                        borderColor: C.skyBorder,
+                        borderColor: isDark ? C.glassBorder : C.border,
+                        ...Platform.select({
+                          ios: { shadowColor: isDark ? C.sky : C.navy },
+                          android: {},
+                        }),
                       },
                     ]}>
-                    <Feather name="heart" size={20} color={C.sky} />
-                  </View>
+                    <View style={styles.favRow}>
+                      <View style={styles.favPageWrap}>
+                        <Text style={[styles.favPage, { color: C.sky }]}>
+                          {pageNumber}
+                        </Text>
+                      </View>
 
-                  <View style={styles.favInfo}>
-                    <Text
-                      style={[styles.favTitle, { color: C.sky }]}
-                      numberOfLines={1}>
-                      {song.title}
-                    </Text>
-                    <Text style={[styles.favMeta, { color: C.text2 }]}>
-                      {song.singerName} · {song.category}
-                    </Text>
-                  </View>
-                </View>
+                      <View style={styles.favMain}>
+                        <View style={styles.favTopRow}>
+                          <View
+                            style={[
+                              styles.favIcon,
+                              {
+                                backgroundColor: isDark
+                                  ? C.skyGlowSoft
+                                  : C.skyPale,
+                                borderColor: C.skyBorder,
+                              },
+                            ]}>
+                            <Feather name="heart" size={20} color={C.sky} />
+                          </View>
 
-                <View
-                  style={[
-                    styles.favFooter,
-                    { borderTopColor: isDark ? C.glassBorder : C.border },
-                  ]}>
-                  <Text style={[styles.favCategory, { color: C.text3 }]}>
-                    {song.category}
-                  </Text>
+                          <View style={styles.favInfo}>
+                            <Text
+                              style={[styles.favTitle, { color: C.text }]}
+                              numberOfLines={1}>
+                              {song.title}
+                            </Text>
+                            <Text
+                              style={[styles.favMeta, { color: C.text2 }]}
+                              numberOfLines={1}>
+                              {song.singerName}
+                            </Text>
+                          </View>
+                        </View>
 
-                  <View
-                    style={[styles.keyChip, { backgroundColor: C.goldDeep }]}>
-                    <Text style={[styles.keyChipText, { color: C.gold }]}>
-                      {song.key}
-                    </Text>
-                  </View>
-                </View>
-              </LinearGradient>
-            </TouchableOpacity>
-          ))}
-        </View>
-      )}
-    </ScrollView>
+                        <View
+                          style={[
+                            styles.favFooter,
+                            {
+                              borderTopColor: isDark ? C.glassBorder : C.border,
+                            },
+                          ]}>
+                          <View style={{ flex: 1 }} />
+
+                          <View
+                            style={[
+                              styles.keyChip,
+                              { backgroundColor: C.goldDeep },
+                            ]}>
+                            <Text style={[styles.keyChipText, { color: C.gold }]}>
+                              {song.key}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+
+                      <Feather name="chevron-right" size={18} color={C.text3} />
+                    </View>
+                  </LinearGradient>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
+      </ScrollView>
+    </View>
   );
 }
 
@@ -357,7 +430,6 @@ function NotificationsTabComponent() {
   const TOP_PADDING =
     Platform.OS === "ios" ? 50 : (StatusBar.currentHeight ?? 24) + 8;
 
-  // ✅ Token-driven per-type gradients — no hardcoded hex
   const notifGradients = (type: string): [string, string] => {
     if (isDark) {
       const map: Record<string, [string, string]> = {
@@ -391,14 +463,12 @@ function NotificationsTabComponent() {
           styles.notifHdrWrap,
           { borderBottomColor: isDark ? C.glassBorder : C.border },
         ]}>
-        {/* ✅ sky bell icon — decorative section header */}
         <Feather name="bell" size={20} color={C.sky} />
         <Text style={[styles.notifHdrText, { color: C.text }]}>
           {t.notifTitle}
         </Text>
 
         {notifs.length > 0 && (
-          // ✅ skyMid bg + sky text — count badge is informational
           <View
             style={[
               styles.notifCount,
@@ -445,7 +515,6 @@ function NotificationsTabComponent() {
                       }),
                     },
                   ]}>
-                  {/* ✅ glass icon box using tokens */}
                   <View
                     style={[
                       styles.notifIconBox,
@@ -457,7 +526,6 @@ function NotificationsTabComponent() {
                     <Feather
                       name={iconMap[n.type] as any}
                       size={18}
-                      // ✅ sky icon — informational/type indicator
                       color={C.sky}
                     />
                   </View>
@@ -573,6 +641,30 @@ const styles = StyleSheet.create({
   },
 
   // ── FAVORITES ──────────────────────
+  favHeaderBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  backButton: {
+    width: 42,
+    height: 42,
+    borderRadius: Radius.md,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+  },
+  favHeaderTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+  },
+  headerRightSpace: {
+    width: 42,
+    height: 42,
+  },
   favCardWrap: {
     overflow: "hidden",
   },
@@ -589,7 +681,25 @@ const styles = StyleSheet.create({
       android: { elevation: 4 },
     }),
   },
-  favHeader: {
+  favRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  favPageWrap: {
+    width: 28,
+    alignItems: "flex-start",
+    justifyContent: "center",
+    marginRight: 10,
+  },
+  favPage: {
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  favMain: {
+    flex: 1,
+    minWidth: 0,
+  },
+  favTopRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.md,
@@ -621,11 +731,6 @@ const styles = StyleSheet.create({
     marginTop: Spacing.md,
     paddingTop: Spacing.md,
     borderTopWidth: 1,
-  },
-  favCategory: {
-    fontSize: 12,
-    fontWeight: "600",
-    textTransform: "capitalize",
   },
 
   // ── NOTIFICATIONS ──────────────────
