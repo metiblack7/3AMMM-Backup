@@ -37,6 +37,95 @@ router.post('/register', async (req, res) => {
   }
 });
 
+// POST /api/auth/google - Google OAuth authentication
+router.post('/google', async (req, res) => {
+  try {
+    const { googleToken } = req.body;
+    if (!googleToken) {
+      return res.status(400).json({ message: 'Google token is required.' });
+    }
+
+    // Exchange authorization code for tokens
+    let googleUser;
+    let accessToken;
+
+    try {
+      const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          code: googleToken,
+          client_id: process.env.GOOGLE_CLIENT_ID || '204274728519-mjf0vtp5jj8gjltcff1ts8g5dv4lsn9v.apps.googleusercontent.com',
+          client_secret: process.env.GOOGLE_CLIENT_SECRET || '', // You need to set this
+          redirect_uri: process.env.GOOGLE_REDIRECT_URI || 'com.ammm.worship://',
+          grant_type: 'authorization_code',
+        }),
+      });
+
+      if (!tokenResponse.ok) {
+        throw new Error('Failed to exchange authorization code');
+      }
+
+      const tokens = await tokenResponse.json();
+      accessToken = tokens.access_token;
+      const idToken = tokens.id_token;
+
+      // Decode ID token to get user info
+      if (idToken) {
+        try {
+          const parts = idToken.split('.');
+          const payload = Buffer.from(parts[1], 'base64').toString('utf8');
+          googleUser = JSON.parse(payload);
+        } catch (err) {
+          // Fallback: fetch user info using access token
+          const userResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          });
+          googleUser = await userResponse.json();
+        }
+      }
+    } catch (err) {
+      // Fallback: treat the token as access token directly
+      accessToken = googleToken;
+      const userResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!userResponse.ok) {
+        throw new Error('Invalid Google token');
+      }
+      googleUser = await userResponse.json();
+    }
+
+    if (!googleUser || !googleUser.email) {
+      return res.status(400).json({ message: 'Unable to get user info from Google' });
+    }
+
+    // Find or create user
+    let user = await User.findOne({ email: googleUser.email });
+
+    if (!user) {
+      // Create new user with Google OAuth
+      user = await User.create({
+        name: googleUser.name || 'User',
+        email: googleUser.email,
+        singerName: googleUser.name || 'User',
+        googleEmail: googleUser.email,
+        role: 'worshiper',
+        // No password for OAuth users
+      });
+    } else if (!user.googleEmail) {
+      // Link existing account to Google
+      user.googleEmail = googleUser.email;
+      await user.save();
+    }
+
+    const token = signToken(user._id);
+    res.status(200).json({ token, user });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 // POST /api/auth/login
 router.post('/login', async (req, res) => {
   try {

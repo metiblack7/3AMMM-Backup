@@ -14,7 +14,7 @@ import {
   Easing,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { Feather } from "@expo/vector-icons";
+import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useApp } from "../lib/AppContext";
 import { DarkColors, LightColors } from "../theme";
@@ -166,7 +166,8 @@ export default function LoginScreen({
 }: {
   onGoRegister: () => void;
 }) {
-  const { signIn, t, toggleLang, darkMode } = useApp();
+  const { signIn, signInWithGoogle, loginAsGuest, t, toggleLang, darkMode } =
+    useApp();
   const insets = useSafeAreaInsets();
   const C = darkMode ? DarkColors : LightColors;
   const isDark = darkMode;
@@ -175,6 +176,8 @@ export default function LoginScreen({
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [showEmailLogin, setShowEmailLogin] = useState(false);
 
   const scrollRef = useRef<ScrollView>(null);
   const keyboardLift = useRef(new Animated.Value(0)).current;
@@ -228,7 +231,7 @@ export default function LoginScreen({
     };
   }, [keyboardLift, cardLift]);
 
-  async function handleLogin() {
+  async function handleEmailLogin() {
     if (!email || !password) {
       setError(t.fillAll);
       return;
@@ -241,6 +244,41 @@ export default function LoginScreen({
       setError(err.message || t.invalidCreds);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleGoogleSignIn() {
+    setGoogleLoading(true);
+    setError("");
+    try {
+      await signInWithGoogle();
+    } catch (err: any) {
+      const message = err.message || "Google sign-in failed";
+
+      // Provide helpful error messages
+      if (message.includes("redirect_uri")) {
+        setError(
+          "Google OAuth not configured for this environment. Use email login instead.",
+        );
+      } else if (message.includes("invalid_client")) {
+        setError("Invalid Google Client ID. Please check configuration.");
+      } else {
+        setError(message);
+      }
+    } finally {
+      setGoogleLoading(false);
+    }
+  }
+
+  async function handleContinueGuest() {
+    try {
+      setGoogleLoading(true);
+      setError("");
+      await loginAsGuest();
+    } catch (err: any) {
+      setError(err.message || "Guest login failed");
+    } finally {
+      setGoogleLoading(false);
     }
   }
 
@@ -376,41 +414,57 @@ export default function LoginScreen({
 
             <Text style={[s.cardTitle, { color: C.text }]}>{t.signIn}</Text>
             <Text style={[s.cardSub, { color: C.text3 }]}>
-              Welcome back to your worship space
+              Access your worship space
             </Text>
 
-            <GlassField
-              label={t.email}
-              icon="mail"
-              value={email}
-              onChangeText={setEmail}
-              placeholder="your@email.com"
-              keyboardType="email-address"
-              colors={C}
-              onFocusScroll={() => {
-                scrollRef.current?.scrollTo({
-                  y: 120,
-                  animated: true,
-                });
-              }}
-            />
+            {/* ── GOOGLE SIGN-IN BUTTON ─────────────────── */}
+            <TouchableOpacity
+              style={[
+                s.socialBtnWrap,
+                {
+                  borderColor: C.border,
+                  backgroundColor: isDark
+                    ? "rgba(255,255,255,0.06)"
+                    : "rgba(255,255,255,0.5)",
+                  opacity: googleLoading ? 0.7 : 1,
+                },
+              ]}
+              onPress={handleGoogleSignIn}
+              disabled={googleLoading}
+              activeOpacity={0.85}>
+              <MaterialCommunityIcons name="google" size={18} color={C.sky} />
+              <Text style={[s.socialBtnText, { color: C.text }]}>
+                {googleLoading ? "Signing in..." : "Continue with Google"}
+              </Text>
+            </TouchableOpacity>
 
-            <GlassField
-              label={t.password}
-              icon="lock"
-              value={password}
-              onChangeText={setPassword}
-              placeholder="••••••••"
-              secureTextEntry
-              colors={C}
-              onFocusScroll={() => {
-                scrollRef.current?.scrollTo({
-                  y: 180,
-                  animated: true,
-                });
-              }}
-            />
+            {/* ── GUEST LOGIN BUTTON ─────────────────────── */}
+            <TouchableOpacity
+              style={[
+                s.socialBtnWrap,
+                {
+                  borderColor: C.border,
+                  backgroundColor: isDark
+                    ? "rgba(255,255,255,0.06)"
+                    : "rgba(255,255,255,0.5)",
+                },
+              ]}
+              onPress={handleContinueGuest}
+              activeOpacity={0.85}>
+              <Feather name="user" size={18} color={C.text2} />
+              <Text style={[s.socialBtnText, { color: C.text }]}>
+                Continue without login
+              </Text>
+            </TouchableOpacity>
 
+            {/* ── DIVIDER ────────────────────────────────── */}
+            <View style={s.dividerWrap}>
+              <View style={[s.dividerLine, { backgroundColor: C.border }]} />
+              <Text style={[s.dividerText, { color: C.text3 }]}>OR</Text>
+              <View style={[s.dividerLine, { backgroundColor: C.border }]} />
+            </View>
+
+            {/* ── ERROR MESSAGE ──────────────────────────── */}
             {error ? (
               <View
                 style={[
@@ -425,29 +479,81 @@ export default function LoginScreen({
               </View>
             ) : null}
 
+            {/* ── TOGGLE EMAIL LOGIN ────────────────────── */}
             <TouchableOpacity
-              style={[s.btnWrap, { opacity: loading ? 0.78 : 1 }]}
-              onPress={handleLogin}
-              disabled={loading}
-              activeOpacity={0.88}>
-              <LinearGradient
-                colors={
-                  loading
-                    ? [C.goldDark, C.goldDark]
-                    : ["#fcc55a", "#fbb040", "#d4920e"]
-                }
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={s.btn}>
-                <View style={s.btnSheen} />
-                <Text style={s.btnText}>
-                  {loading ? t.signingIn : t.btnSignIn}
-                </Text>
-                {!loading && (
-                  <Feather name="arrow-right" size={18} color="#010f18" />
-                )}
-              </LinearGradient>
+              style={s.toggleLoginBtn}
+              onPress={() => setShowEmailLogin(!showEmailLogin)}
+              activeOpacity={0.7}>
+              <Text style={[s.toggleLoginText, { color: C.sky }]}>
+                {showEmailLogin ? "Hide Email Login" : "Use Email & Password"}
+              </Text>
+              <Feather
+                name={showEmailLogin ? "chevron-up" : "chevron-down"}
+                size={16}
+                color={C.sky}
+              />
             </TouchableOpacity>
+
+            {/* ── EMAIL/PASSWORD FIELDS (COLLAPSIBLE) ───– */}
+            {showEmailLogin && (
+              <>
+                <GlassField
+                  label={t.email}
+                  icon="mail"
+                  value={email}
+                  onChangeText={setEmail}
+                  placeholder="your@email.com"
+                  keyboardType="email-address"
+                  colors={C}
+                  onFocusScroll={() => {
+                    scrollRef.current?.scrollTo({
+                      y: 120,
+                      animated: true,
+                    });
+                  }}
+                />
+
+                <GlassField
+                  label={t.password}
+                  icon="lock"
+                  value={password}
+                  onChangeText={setPassword}
+                  placeholder="••••••••"
+                  secureTextEntry
+                  colors={C}
+                  onFocusScroll={() => {
+                    scrollRef.current?.scrollTo({
+                      y: 180,
+                      animated: true,
+                    });
+                  }}
+                />
+
+                <TouchableOpacity
+                  style={[s.btnWrap, { opacity: loading ? 0.78 : 1 }]}
+                  onPress={handleEmailLogin}
+                  disabled={loading}
+                  activeOpacity={0.88}>
+                  <LinearGradient
+                    colors={
+                      loading
+                        ? [C.goldDark, C.goldDark]
+                        : ["#fcc55a", "#fbb040", "#d4920e"]
+                    }
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={s.btn}>
+                    <View style={s.btnSheen} />
+                    <Text style={s.btnText}>
+                      {loading ? t.signingIn : t.btnSignIn}
+                    </Text>
+                    {!loading && (
+                      <Feather name="arrow-right" size={18} color="#010f18" />
+                    )}
+                  </LinearGradient>
+                </TouchableOpacity>
+              </>
+            )}
 
             <View style={s.switchRow}>
               <Text style={[s.switchText, { color: C.text3 }]}>{t.noAcc} </Text>
@@ -568,6 +674,51 @@ const s = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     marginBottom: 24,
+  },
+
+  socialBtnWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+    paddingVertical: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    marginBottom: 12,
+  },
+  socialBtnText: {
+    fontSize: 14,
+    fontWeight: "600",
+    letterSpacing: 0.3,
+  },
+
+  dividerWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginVertical: 18,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+  },
+  dividerText: {
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 1.5,
+  },
+
+  toggleLoginBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 10,
+    marginBottom: 12,
+  },
+  toggleLoginText: {
+    fontSize: 13,
+    fontWeight: "600",
   },
 
   errorWrap: {

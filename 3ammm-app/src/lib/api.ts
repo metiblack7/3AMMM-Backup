@@ -121,6 +121,9 @@ export const api = {
     register: (name: string, email: string, password: string, singerName?: string) =>
       apiFetch('/api/auth/register', { method: 'POST', body: JSON.stringify({ name, email, password, singerName }) }),
 
+    googleAuth: (googleToken: string, googleEmail: string, googleName: string) =>
+      apiFetch('/api/auth/google', { method: 'POST', body: JSON.stringify({ googleToken, googleEmail, googleName }) }),
+
     me: () => apiFetch('/api/auth/me'),
   },
 

@@ -513,7 +513,7 @@ export default function LyricsScreen({
   const headerBg = isDark ? "rgba(5,14,24,0.90)" : "rgba(255,255,255,0.96)";
   const scrollBg = isDark ? C.bgDeep : C.bg;
   const iconColor = isDark ? "rgba(240,248,255,0.94)" : "#12344d";
-  const LABEL_COLOR = isDark ? "#87ceeb" : "#1a6d96";
+  const LABEL_COLOR = C.sky;
   const btnBase = isDark ? "rgba(255,255,255,0.07)" : "rgba(255,255,255,0.80)";
   const btnBorder = isDark ? "rgba(255,255,255,0.13)" : "rgba(4,57,84,0.10)";
 
@@ -1101,7 +1101,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 22,
     paddingTop: 0,
   },
-  section: { marginBottom: 28 },
+  section: { marginBottom: 14 },
   lyricsText: { letterSpacing: 0.2 },
 });
 
@@ -1136,7 +1136,7 @@ const sls = StyleSheet.create({
     minHeight: 22,
   },
   bar: {
-    width: 3,
+    width: 4,
     height: 18,
     borderRadius: 2,
     backgroundColor: "#fbb040",

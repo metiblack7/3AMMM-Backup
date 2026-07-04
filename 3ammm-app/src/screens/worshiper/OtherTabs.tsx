@@ -10,6 +10,7 @@ import {
   StatusBar,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { BlurView } from "expo-blur";
 import { Feather } from "@expo/vector-icons";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/AppContext";
@@ -101,95 +102,104 @@ function SetlistsTabComponent({ onOpenSong }: SongProps) {
 
           return (
             <View key={sl._id} style={styles.cardWrap}>
-              <LinearGradient
-                colors={cardGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={[
-                  styles.card,
-                  {
-                    borderColor: isDark ? C.glassBorder : C.border,
-                    ...Platform.select({
-                      ios: { shadowColor: C.sky },
-                      android: {},
-                    }),
-                  },
-                ]}>
-                <View
+              <BlurView
+                intensity={isDark ? 85 : 60}
+                style={styles.blurContainer}>
+                <LinearGradient
+                  colors={cardGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
                   style={[
-                    styles.cardHdr,
-                    { borderBottomColor: isDark ? C.glassBorder : C.border },
+                    styles.card,
+                    {
+                      borderColor: isDark ? C.glassBorder : C.border,
+                      ...Platform.select({
+                        ios: { shadowColor: C.sky },
+                        android: {},
+                      }),
+                    },
                   ]}>
                   <View
                     style={[
-                      styles.dateBadge,
-                      {
-                        backgroundColor: C.skyPale,
-                        borderWidth: 1,
-                        borderColor: C.skyBorder,
-                      },
+                      styles.cardHdr,
+                      { borderBottomColor: isDark ? C.glassBorder : C.border },
                     ]}>
-                    <Text style={[styles.dateText, { color: C.sky }]}>
-                      {sl.date}
-                    </Text>
-                  </View>
-
-                  <Text
-                    style={[styles.cardTheme, { color: C.text }]}
-                    numberOfLines={1}>
-                    {sl.title}
-                  </Text>
-
-                  <View
-                    style={[
-                      styles.songCountBadge,
-                      { backgroundColor: isDark ? C.skyMid : C.skyPale },
-                    ]}>
-                    <Text style={[styles.songCountText, { color: C.sky }]}>
-                      {songs.length}
-                    </Text>
-                  </View>
-                </View>
-
-                {songs.map((song, i) => (
-                  <TouchableOpacity
-                    key={song._id}
-                    style={[
-                      styles.songRow,
-                      i < songs.length - 1 && [
-                        styles.songBorder,
+                    <View
+                      style={[
+                        styles.dateBadge,
                         {
-                          borderBottomColor: isDark ? C.glassBorder : C.border,
+                          backgroundColor: C.skyPale,
+                          borderWidth: 1,
+                          borderColor: C.skyBorder,
                         },
-                      ],
-                    ]}
-                    onPress={() => onOpenSong(song)}
-                    activeOpacity={0.7}>
-                    <Text style={[styles.songNum, { color: C.sky }]}>
-                      {i + 1}
-                    </Text>
+                      ]}>
+                      <Text style={[styles.dateText, { color: C.sky }]}>
+                        {sl.date}
+                      </Text>
+                    </View>
 
                     <Text
-                      style={[styles.songName, { color: C.text }]}
+                      style={[styles.cardTheme, { color: C.text }]}
                       numberOfLines={1}>
-                      {song.title}
-                    </Text>
-
-                    <Text
-                      style={[styles.songSinger, { color: C.text2 }]}
-                      numberOfLines={1}>
-                      {song.singerName}
+                      {sl.title}
                     </Text>
 
                     <View
-                      style={[styles.keyChip, { backgroundColor: C.goldDeep }]}>
-                      <Text style={[styles.keyChipText, { color: C.gold }]}>
-                        {song.key}
+                      style={[
+                        styles.songCountBadge,
+                        { backgroundColor: isDark ? C.skyMid : C.skyPale },
+                      ]}>
+                      <Text style={[styles.songCountText, { color: C.sky }]}>
+                        {songs.length}
                       </Text>
                     </View>
-                  </TouchableOpacity>
-                ))}
-              </LinearGradient>
+                  </View>
+
+                  {songs.map((song, i) => (
+                    <TouchableOpacity
+                      key={song._id}
+                      style={[
+                        styles.songRow,
+                        i < songs.length - 1 && [
+                          styles.songBorder,
+                          {
+                            borderBottomColor: isDark
+                              ? C.glassBorder
+                              : C.border,
+                          },
+                        ],
+                      ]}
+                      onPress={() => onOpenSong(song)}
+                      activeOpacity={0.7}>
+                      <Text style={[styles.songNum, { color: C.sky }]}>
+                        {i + 1}
+                      </Text>
+
+                      <Text
+                        style={[styles.songName, { color: C.text }]}
+                        numberOfLines={1}>
+                        {song.title}
+                      </Text>
+
+                      <Text
+                        style={[styles.songSinger, { color: C.text2 }]}
+                        numberOfLines={1}>
+                        {song.singerName}
+                      </Text>
+
+                      <View
+                        style={[
+                          styles.keyChip,
+                          { backgroundColor: C.goldDeep },
+                        ]}>
+                        <Text style={[styles.keyChipText, { color: C.gold }]}>
+                          {song.key}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </LinearGradient>
+              </BlurView>
             </View>
           );
         })
@@ -286,9 +296,7 @@ function FavoritesTabComponent({
           <Feather name="chevron-left" size={22} color={C.sky} />
         </TouchableOpacity>
 
-        <Text style={[styles.favHeaderTitle, { color: C.text }]}>
-          {t.favs}
-        </Text>
+        <Text style={[styles.favHeaderTitle, { color: C.text }]}>{t.favs}</Text>
 
         <View style={styles.headerRightSpace} />
       </View>
@@ -324,80 +332,91 @@ function FavoritesTabComponent({
                   style={styles.favCardWrap}
                   onPress={() => onOpenSong(song)}
                   activeOpacity={0.7}>
-                  <LinearGradient
-                    colors={favGradient}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={[
-                      styles.favCard,
-                      {
-                        borderColor: isDark ? C.glassBorder : C.border,
-                        ...Platform.select({
-                          ios: { shadowColor: isDark ? C.sky : C.navy },
-                          android: {},
-                        }),
-                      },
-                    ]}>
-                    <View style={styles.favRow}>
-                      <View style={styles.favPageWrap}>
-                        <Text style={[styles.favPage, { color: C.sky }]}>
-                          {pageNumber}
-                        </Text>
-                      </View>
+                  <BlurView
+                    intensity={isDark ? 85 : 60}
+                    style={styles.blurContainer}>
+                    <LinearGradient
+                      colors={favGradient}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={[
+                        styles.favCard,
+                        {
+                          borderColor: isDark ? C.glassBorder : C.border,
+                          ...Platform.select({
+                            ios: { shadowColor: isDark ? C.sky : C.navy },
+                            android: {},
+                          }),
+                        },
+                      ]}>
+                      <View style={styles.favRow}>
+                        <View style={styles.favPageWrap}>
+                          <Text style={[styles.favPage, { color: C.sky }]}>
+                            {pageNumber}
+                          </Text>
+                        </View>
 
-                      <View style={styles.favMain}>
-                        <View style={styles.favTopRow}>
+                        <View style={styles.favMain}>
+                          <View style={styles.favTopRow}>
+                            <View
+                              style={[
+                                styles.favIcon,
+                                {
+                                  backgroundColor: isDark
+                                    ? C.skyGlowSoft
+                                    : C.skyPale,
+                                  borderColor: C.skyBorder,
+                                },
+                              ]}>
+                              <Feather name="heart" size={20} color={C.sky} />
+                            </View>
+
+                            <View style={styles.favInfo}>
+                              <Text
+                                style={[styles.favTitle, { color: C.text }]}
+                                numberOfLines={1}>
+                                {song.title}
+                              </Text>
+                              <Text
+                                style={[styles.favMeta, { color: C.text2 }]}
+                                numberOfLines={1}>
+                                {song.singerName}
+                              </Text>
+                            </View>
+                          </View>
+
                           <View
                             style={[
-                              styles.favIcon,
+                              styles.favFooter,
                               {
-                                backgroundColor: isDark
-                                  ? C.skyGlowSoft
-                                  : C.skyPale,
-                                borderColor: C.skyBorder,
+                                borderTopColor: isDark
+                                  ? C.glassBorder
+                                  : C.border,
                               },
                             ]}>
-                            <Feather name="heart" size={20} color={C.sky} />
-                          </View>
+                            <View style={{ flex: 1 }} />
 
-                          <View style={styles.favInfo}>
-                            <Text
-                              style={[styles.favTitle, { color: C.text }]}
-                              numberOfLines={1}>
-                              {song.title}
-                            </Text>
-                            <Text
-                              style={[styles.favMeta, { color: C.text2 }]}
-                              numberOfLines={1}>
-                              {song.singerName}
-                            </Text>
+                            <View
+                              style={[
+                                styles.keyChip,
+                                { backgroundColor: C.goldDeep },
+                              ]}>
+                              <Text
+                                style={[styles.keyChipText, { color: C.gold }]}>
+                                {song.key}
+                              </Text>
+                            </View>
                           </View>
                         </View>
 
-                        <View
-                          style={[
-                            styles.favFooter,
-                            {
-                              borderTopColor: isDark ? C.glassBorder : C.border,
-                            },
-                          ]}>
-                          <View style={{ flex: 1 }} />
-
-                          <View
-                            style={[
-                              styles.keyChip,
-                              { backgroundColor: C.goldDeep },
-                            ]}>
-                            <Text style={[styles.keyChipText, { color: C.gold }]}>
-                              {song.key}
-                            </Text>
-                          </View>
-                        </View>
+                        <Feather
+                          name="chevron-right"
+                          size={18}
+                          color={C.text3}
+                        />
                       </View>
-
-                      <Feather name="chevron-right" size={18} color={C.text3} />
-                    </View>
-                  </LinearGradient>
+                    </LinearGradient>
+                  </BlurView>
                 </TouchableOpacity>
               );
             })}
@@ -501,49 +520,53 @@ function NotificationsTabComponent() {
                 key={n._id}
                 activeOpacity={0.7}
                 style={styles.notifCardWrap}>
-                <LinearGradient
-                  colors={[g1, g2]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={[
-                    styles.notifCard,
-                    {
-                      borderColor: isDark ? C.glassBorder : C.border,
-                      ...Platform.select({
-                        ios: { shadowColor: isDark ? C.sky : C.navy },
-                        android: {},
-                      }),
-                    },
-                  ]}>
-                  <View
+                <BlurView
+                  intensity={isDark ? 85 : 60}
+                  style={styles.blurContainer}>
+                  <LinearGradient
+                    colors={[g1, g2]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
                     style={[
-                      styles.notifIconBox,
+                      styles.notifCard,
                       {
-                        backgroundColor: isDark ? C.skyGlowSoft : C.skyPale,
-                        borderColor: C.skyBorder,
+                        borderColor: isDark ? C.glassBorder : C.border,
+                        ...Platform.select({
+                          ios: { shadowColor: isDark ? C.sky : C.navy },
+                          android: {},
+                        }),
                       },
                     ]}>
-                    <Feather
-                      name={iconMap[n.type] as any}
-                      size={18}
-                      color={C.sky}
-                    />
-                  </View>
+                    <View
+                      style={[
+                        styles.notifIconBox,
+                        {
+                          backgroundColor: isDark ? C.skyGlowSoft : C.skyPale,
+                          borderColor: C.skyBorder,
+                        },
+                      ]}>
+                      <Feather
+                        name={iconMap[n.type] as any}
+                        size={18}
+                        color={C.sky}
+                      />
+                    </View>
 
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.notifItemTitle, { color: C.text }]}>
-                      {n.title}
-                    </Text>
-                    <Text
-                      style={[styles.notifItemBody, { color: C.text2 }]}
-                      numberOfLines={2}>
-                      {n.body}
-                    </Text>
-                    <Text style={[styles.notifTime, { color: C.text3 }]}>
-                      {new Date(n.createdAt).toLocaleDateString()}
-                    </Text>
-                  </View>
-                </LinearGradient>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.notifItemTitle, { color: C.text }]}>
+                        {n.title}
+                      </Text>
+                      <Text
+                        style={[styles.notifItemBody, { color: C.text2 }]}
+                        numberOfLines={2}>
+                        {n.body}
+                      </Text>
+                      <Text style={[styles.notifTime, { color: C.text3 }]}>
+                        {new Date(n.createdAt).toLocaleDateString()}
+                      </Text>
+                    </View>
+                  </LinearGradient>
+                </BlurView>
               </TouchableOpacity>
             );
           })}
@@ -557,11 +580,16 @@ export const NotificationsTab = React.memo(NotificationsTabComponent);
 
 // All structural styles — no colors hardcoded
 const styles = StyleSheet.create({
+  blurContainer: {
+    borderRadius: Radius.lg,
+    overflow: "hidden",
+  },
   // ── SETLIST ─────────────────────────
   cardWrap: {
     marginHorizontal: Spacing.lg,
     marginBottom: Spacing.md,
     overflow: "hidden",
+    borderRadius: Radius.lg,
   },
   card: {
     borderRadius: Radius.lg,
@@ -569,11 +597,11 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     ...Platform.select({
       ios: {
-        shadowOpacity: 0.08,
-        shadowRadius: 14,
-        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.1,
+        shadowRadius: 16,
+        shadowOffset: { width: 0, height: 8 },
       },
-      android: { elevation: 4 },
+      android: { elevation: 6 },
     }),
   },
   cardHdr: {

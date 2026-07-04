@@ -16,9 +16,17 @@ const userSchema = new mongoose.Schema({
   },
   password: {
     type: String,
-    required: [true, 'Password is required'],
     minlength: 6,
     select: false, // never return password in queries
+  },
+  googleId: {
+    type: String,
+    sparse: true,
+    unique: true,
+  },
+  googleEmail: {
+    type: String,
+    sparse: true,
   },
   singerName: {
     type: String,
@@ -35,9 +43,9 @@ const userSchema = new mongoose.Schema({
   },
 }, { timestamps: true });
 
-// Hash password before saving
+// Hash password before saving (only if it's provided)
 userSchema.pre('save', async function (next) {
-  if (!this.isModified('password')) return next();
+  if (!this.isModified('password') || !this.password) return next();
   this.password = await bcrypt.hash(this.password, 12);
   next();
 });

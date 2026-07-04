@@ -17,7 +17,9 @@ const API_URLS = {
 };
 
 export const API_URL = API_URLS[ENV];
-
+// ── Google Auth Configuration ────────────────────────────────────
+// Web client ID for Google OAuth
+export const GOOGLE_AUTH_CLIENT_ID = '204274728519-mjf0vtp5jj8gjltcff1ts8g5dv4lsn9v.apps.googleusercontent.com';
 // ── Feature Flags ────────────────────────────────────────────────────
 export const FEATURES = {
   OFFLINE_MODE: true,

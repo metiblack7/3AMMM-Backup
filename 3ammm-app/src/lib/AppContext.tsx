@@ -17,7 +17,10 @@ import {
 } from "react-native";
 import { BlurView } from "expo-blur";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as WebBrowser from "expo-web-browser";
 import { api, saveToken, getToken, clearToken } from "./api";
+import { initiateGoogleAuth, getUserInfoFromIdToken } from "./googleAuth";
+import { GOOGLE_AUTH_CLIENT_ID } from "./env";
 import { startAutoSync, syncAll } from "./sync";
 import { useNetworkStatus } from "./network";
 import translations, { LangKey } from "./i18n";
@@ -49,6 +52,8 @@ export interface AppContextType {
     password: string,
     singerName?: string,
   ) => Promise<void>;
+  signInWithGoogle: () => Promise<void>;
+  loginAsGuest: () => Promise<void>;
   signOut: () => Promise<void>;
   isAdmin: boolean;
   isAuthenticated: boolean;
@@ -383,6 +388,49 @@ export function AppProvider({ children }: AppProviderProps) {
     await AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(user));
   }
 
+  async function signInWithGoogle() {
+    setAuthError("");
+    try {
+      // Initiate Google OAuth flow
+      const authResponse = await initiateGoogleAuth(GOOGLE_AUTH_CLIENT_ID);
+
+      if (authResponse && authResponse.access_token) {
+        // For authorization code flow, we need to exchange the code on the backend
+        // The backend will handle the token exchange with Google
+        const { token, user } = await api.auth.googleAuth(
+          authResponse.access_token,
+          "", // Email will be fetched by backend
+          "", // Name will be fetched by backend
+        );
+
+        await saveToken(token);
+        setProfile(user);
+        await registerForPushNotificationsOnSignUp(user.name).catch(() => {});
+        await AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(user));
+      }
+    } catch (err: any) {
+      setAuthError(err.message || "Google sign-in failed");
+      throw err;
+    }
+  }
+
+  async function loginAsGuest() {
+    try {
+      const guestProfile: Profile = {
+        _id: "guest_" + Date.now(),
+        name: "Guest User",
+        singerName: "Guest",
+        role: "worshiper",
+        email: "guest@saba.local",
+      };
+      setProfile(guestProfile);
+      await AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(guestProfile));
+    } catch (err: any) {
+      setAuthError(err.message || "Guest login failed");
+      throw err;
+    }
+  }
+
   async function signOut() {
     await clearToken();
     setProfile(null);
@@ -434,6 +482,8 @@ export function AppProvider({ children }: AppProviderProps) {
         toggleLang,
         signIn,
         signUp,
+        signInWithGoogle,
+        loginAsGuest,
         signOut,
         isAdmin: profile?.role === "admin",
         isAuthenticated: !!profile && !loading,
