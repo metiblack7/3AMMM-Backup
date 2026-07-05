@@ -18,9 +18,11 @@ import {
   Platform,
   StatusBar,
   Animated,
+  Easing,
   Keyboard,
   NativeSyntheticEvent,
   NativeScrollEvent,
+  ViewToken,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Feather } from "@expo/vector-icons";
@@ -28,7 +30,7 @@ import { api } from "../../lib/api";
 import { useApp } from "../../lib/AppContext";
 import { useTheme } from "../../lib/useTheme";
 import { useNetworkStatus } from "../../lib/network";
-import { Loader, EmptyState } from "../../components/UI";
+import { EmptyState } from "../../components/UI";
 import { Spacing } from "../../theme";
 import { Song } from "../LyricsScreen";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -44,6 +46,265 @@ interface Props {
 }
 
 type NumberedSong = Song & { pageNumber: number };
+
+const AnimatedFlatList = Animated.createAnimatedComponent(
+  FlatList<NumberedSong>,
+);
+
+const STAGGER_CAP = 280;
+const STAGGER_STEP = 45;
+
+// Height of the collapsible header (search box + singer pills).
+const HEADER_HEIGHT = 118;
+
+// Must match the row-advance value used in getItemLayout below.
+const CARD_ROW_HEIGHT = 92;
+
+function staggerDelay(index: number) {
+  return Math.min((index % 10) * STAGGER_STEP, STAGGER_CAP);
+}
+
+// ── Animated song card (mount stagger + iOS-notification-style
+//    edge squish, active only while scrolling) ──────────────────
+const AnimatedSongCard = React.memo(function AnimatedSongCard({
+  item,
+  index,
+  isDark,
+  C,
+  cardGradients,
+  onOpenSong,
+  isEdge,
+  scrollActive,
+}: {
+  item: NumberedSong;
+  index: number;
+  isDark: boolean;
+  C: ReturnType<typeof useTheme>["C"];
+  cardGradients: (category: string) => [string, string];
+  onOpenSong: (song: Song) => void;
+  isEdge: boolean;
+  scrollActive: Animated.Value;
+}) {
+  const mountOpacity = useRef(new Animated.Value(0)).current;
+  const mountTranslateY = useRef(new Animated.Value(22)).current;
+  const mountScale = useRef(new Animated.Value(0.96)).current;
+
+  useEffect(() => {
+    mountOpacity.setValue(0);
+    mountTranslateY.setValue(22);
+    mountScale.setValue(0.96);
+
+    const delay = staggerDelay(index);
+    Animated.parallel([
+      Animated.timing(mountOpacity, {
+        toValue: 1,
+        duration: 340,
+        delay,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(mountTranslateY, {
+        toValue: 0,
+        duration: 380,
+        delay,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.spring(mountScale, {
+        toValue: 1,
+        speed: 18,
+        bounciness: 4,
+        delay,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [item._id, index, mountOpacity, mountTranslateY, mountScale]);
+
+  // ── Edge squish: 0 = normal, 1 = fully compressed. Eases toward
+  // 1 only when this card becomes the first/last visible card on
+  // screen (isEdge). Combined below with scrollActive so it only
+  // ever shows while the list is actually being scrolled.
+  const edgeAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(edgeAnim, {
+      toValue: isEdge ? 1 : 0,
+      duration: 220,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [isEdge, edgeAnim]);
+
+  const squish = useMemo(
+    () => Animated.multiply(edgeAnim, scrollActive),
+    [edgeAnim, scrollActive],
+  );
+
+  const squishScale = useMemo(
+    () => squish.interpolate({ inputRange: [0, 1], outputRange: [1, 0.93] }),
+    [squish],
+  );
+
+  const squishOpacity = useMemo(
+    () => squish.interpolate({ inputRange: [0, 1], outputRange: [1, 0.55] }),
+    [squish],
+  );
+
+  const combinedScale = useMemo(
+    () => Animated.multiply(mountScale, squishScale),
+    [mountScale, squishScale],
+  );
+
+  const combinedOpacity = useMemo(
+    () => Animated.multiply(mountOpacity, squishOpacity),
+    [mountOpacity, squishOpacity],
+  );
+
+  const [g1, g2] = cardGradients(item.category);
+
+  return (
+    <Animated.View
+      style={{
+        opacity: combinedOpacity,
+        transform: [{ translateY: mountTranslateY }, { scale: combinedScale }],
+      }}>
+      <TouchableOpacity
+        style={ss.songCardWrap}
+        onPress={() => onOpenSong(item)}
+        activeOpacity={0.75}>
+        <LinearGradient
+          colors={[g1, g2]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[
+            ss.songCard,
+            {
+              borderColor: isDark ? C.glassBorder : C.border,
+              ...Platform.select({
+                ios: { shadowColor: isDark ? C.sky : C.navy },
+                android: {},
+              }),
+            },
+          ]}>
+          <View style={ss.songHeader}>
+            <View
+              style={[
+                ss.artContainer,
+                {
+                  backgroundColor: isDark ? C.skyGlowSoft : C.skyPale,
+                  borderColor: C.skyBorder,
+                },
+              ]}>
+              <Feather name="music" size={20} color={isDark ? C.sky : C.navy} />
+            </View>
+
+            <View style={ss.songInfo}>
+              <Text style={[ss.songTitle, { color: C.text }]}>
+                {item.title}
+              </Text>
+              <Text style={[ss.songMeta, { color: C.text2 }]}>
+                {item.singerName}
+              </Text>
+            </View>
+
+            <Feather name="chevron-right" size={18} color={C.text3} />
+          </View>
+
+          <View
+            style={[
+              ss.songFooter,
+              { borderTopColor: isDark ? C.glassBorder : C.border },
+            ]}>
+            <Text style={[ss.songNumber, { color: C.text3 }]}>
+              {item.pageNumber}
+            </Text>
+            <View style={[ss.keyChip, { backgroundColor: C.goldDeep }]}>
+              <Text style={[ss.keyChipText, { color: C.gold }]}>
+                {item.key}
+              </Text>
+            </View>
+          </View>
+        </LinearGradient>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+});
+
+// ── Pulsing skeleton while songs load ────────────────────────────
+function SongsLoadingSkeleton({
+  topPadding,
+  bg,
+  surface,
+  border,
+}: {
+  topPadding: number;
+  bg: string;
+  surface: string;
+  border: string;
+}) {
+  const pulse = useRef(new Animated.Value(0.4)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, {
+          toValue: 1,
+          duration: 900,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulse, {
+          toValue: 0.4,
+          duration: 900,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse]);
+
+  return (
+    <View style={{ flex: 1, backgroundColor: bg, paddingTop: topPadding }}>
+      <View style={{ paddingHorizontal: Spacing.lg, paddingTop: Spacing.md }}>
+        <Animated.View
+          style={[
+            ss.skeletonSearch,
+            { backgroundColor: surface, borderColor: border, opacity: pulse },
+          ]}
+        />
+      </View>
+      <View style={ss.skeletonPills}>
+        {[72, 88, 64, 96].map((w, i) => (
+          <Animated.View
+            key={i}
+            style={[
+              ss.skeletonPill,
+              {
+                width: w,
+                backgroundColor: surface,
+                borderColor: border,
+                opacity: pulse,
+              },
+            ]}
+          />
+        ))}
+      </View>
+      <View style={ss.skeletonList}>
+        {Array.from({ length: 7 }).map((_, i) => (
+          <Animated.View
+            key={i}
+            style={[
+              ss.skeletonCard,
+              { backgroundColor: surface, borderColor: border, opacity: pulse },
+            ]}
+          />
+        ))}
+      </View>
+    </View>
+  );
+}
 
 function SongsTabComponent({ onOpenSong, scrollOffsetRef }: Props) {
   const { t } = useApp();
@@ -66,6 +327,9 @@ function SongsTabComponent({ onOpenSong, scrollOffsetRef }: Props) {
   const [pageError, setPageError] = useState(false);
   const pageShake = useRef(new Animated.Value(0)).current;
   const pageInputRef = useRef<TextInput>(null);
+
+  // ── List fade on filter change ───────────────────────────────
+  const listFade = useRef(new Animated.Value(1)).current;
 
   // ── Keyboard lift for floating search ────────────────────────
   const keyboardLift = useRef(new Animated.Value(0)).current;
@@ -107,6 +371,83 @@ function SongsTabComponent({ onOpenSong, scrollOffsetRef }: Props) {
    * every re-render.
    */
   const restoredRef = useRef(false);
+
+  // ── Collapsing header scroll value ────────────────────────────
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const diffClampScroll = useRef(
+    Animated.diffClamp(scrollY, 0, HEADER_HEIGHT),
+  ).current;
+
+  const headerTranslateY = diffClampScroll.interpolate({
+    inputRange: [0, HEADER_HEIGHT],
+    outputRange: [0, -HEADER_HEIGHT],
+    extrapolate: "clamp",
+  });
+
+  const headerOpacity = diffClampScroll.interpolate({
+    inputRange: [0, HEADER_HEIGHT * 0.6, HEADER_HEIGHT],
+    outputRange: [1, 0.4, 0],
+    extrapolate: "clamp",
+  });
+
+  // ── "Is actively scrolling" driver for the card edge-squish ───
+  // 0 = idle, 1 = actively dragging/decelerating. Cards only squish
+  // while this is > 0, so the effect never lingers once you stop.
+  const scrollActive = useRef(new Animated.Value(0)).current;
+
+  const onScrollBeginDrag = useCallback(() => {
+    Animated.timing(scrollActive, {
+      toValue: 1,
+      duration: 140,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [scrollActive]);
+
+  const onMomentumScrollEnd = useCallback(() => {
+    Animated.timing(scrollActive, {
+      toValue: 0,
+      duration: 260,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [scrollActive]);
+
+  const onScrollEndDrag = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      // If there's no residual velocity, onMomentumScrollEnd may not
+      // fire — catch that case here so the squish always relaxes.
+      const v = e.nativeEvent.velocity?.y ?? 0;
+      if (Math.abs(v) < 0.05) {
+        Animated.timing(scrollActive, {
+          toValue: 0,
+          duration: 260,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }).start();
+      }
+    },
+    [scrollActive],
+  );
+
+  // ── First/last visible card tracking (drives which cards squish) ──
+  const [edgeIndices, setEdgeIndices] = useState<{
+    first: number | null;
+    last: number | null;
+  }>({ first: null, last: null });
+
+  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 55 }).current;
+
+  const onViewableItemsChanged = useRef(
+    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
+      if (viewableItems.length === 0) return;
+      const first = viewableItems[0].index;
+      const last = viewableItems[viewableItems.length - 1].index;
+      setEdgeIndices((prev) =>
+        prev.first === first && prev.last === last ? prev : { first, last },
+      );
+    },
+  ).current;
 
   // ── Load ─────────────────────────────────────────────────────
   const load = useCallback(async () => {
@@ -177,6 +518,16 @@ function SongsTabComponent({ onOpenSong, scrollOffsetRef }: Props) {
     [songsWithNumbers, query, singerFilter, performSearch],
   );
 
+  useEffect(() => {
+    listFade.setValue(0.45);
+    Animated.timing(listFade, {
+      toValue: 1,
+      duration: 260,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [query, singerFilter, listFade]);
+
   // ── Scroll save (pixel-accurate, no re-render cost) ──────────
   const handleScroll = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -185,17 +536,29 @@ function SongsTabComponent({ onOpenSong, scrollOffsetRef }: Props) {
     [scrollOffsetRef],
   );
 
+  // Drives scrollY (header collapse) on the native thread AND still
+  // calls handleScroll so the pixel-accurate ref keeps working.
+  const onListScroll = useMemo(
+    () =>
+      Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
+        useNativeDriver: true,
+        listener: handleScroll,
+      }),
+    [scrollY, handleScroll],
+  );
+
   // ── Scroll restore ───────────────────────────────────────────
   useEffect(() => {
     if (loading || songs.length === 0 || restoredRef.current) return;
     restoredRef.current = true;
     const offset = scrollOffsetRef.current;
     if (offset > 0) {
+      scrollY.setValue(offset);
       requestAnimationFrame(() => {
-        listRef.current?.scrollToOffset({ offset, animated: false });
+        listRef.current?.scrollToOffset({ offset, animated: true });
       });
     }
-  }, [loading, songs, scrollOffsetRef]);
+  }, [loading, songs, scrollOffsetRef, scrollY]);
 
   // ── Card gradient ────────────────────────────────────────────
   const cardGradients = useCallback(
@@ -272,86 +635,43 @@ function SongsTabComponent({ onOpenSong, scrollOffsetRef }: Props) {
 
   // ── Render song card ─────────────────────────────────────────
   const renderSongItem = useCallback(
-    ({ item }: { item: NumberedSong }) => {
-      const [g1, g2] = cardGradients(item.category);
-
-      return (
-        <TouchableOpacity
-          style={ss.songCardWrap}
-          onPress={() => onOpenSong(item)}
-          activeOpacity={0.75}>
-          <LinearGradient
-            colors={[g1, g2]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={[
-              ss.songCard,
-              {
-                borderColor: isDark ? C.glassBorder : C.border,
-                ...Platform.select({
-                  ios: { shadowColor: isDark ? C.sky : C.navy },
-                  android: {},
-                }),
-              },
-            ]}>
-            <View style={ss.songHeader}>
-              <View
-                style={[
-                  ss.artContainer,
-                  {
-                    backgroundColor: isDark ? C.skyGlowSoft : C.skyPale,
-                    borderColor: C.skyBorder,
-                  },
-                ]}>
-                <Feather
-                  name="music"
-                  size={20}
-                  color={isDark ? C.sky : C.navy}
-                />
-              </View>
-
-              <View style={ss.songInfo}>
-                <Text style={[ss.songTitle, { color: C.text }]}>
-                  {item.title}
-                </Text>
-                <Text style={[ss.songMeta, { color: C.text2 }]}>
-                  {item.singerName}
-                </Text>
-              </View>
-
-              <Feather name="chevron-right" size={18} color={C.text3} />
-            </View>
-
-            <View
-              style={[
-                ss.songFooter,
-                { borderTopColor: isDark ? C.glassBorder : C.border },
-              ]}>
-              <Text style={[ss.songNumber, { color: C.text3 }]}>
-                {item.pageNumber}
-              </Text>
-              <View style={[ss.keyChip, { backgroundColor: C.goldDeep }]}>
-                <Text style={[ss.keyChipText, { color: C.gold }]}>
-                  {item.key}
-                </Text>
-              </View>
-            </View>
-          </LinearGradient>
-        </TouchableOpacity>
-      );
-    },
-    [C, isDark, cardGradients, onOpenSong],
+    ({ item, index }: { item: NumberedSong; index: number }) => (
+      <AnimatedSongCard
+        item={item}
+        index={index}
+        isDark={isDark}
+        C={C}
+        cardGradients={cardGradients}
+        onOpenSong={onOpenSong}
+        isEdge={index === edgeIndices.first || index === edgeIndices.last}
+        scrollActive={scrollActive}
+      />
+    ),
+    [C, isDark, cardGradients, onOpenSong, edgeIndices, scrollActive],
   );
 
   const getItemLayout = useCallback(
-    (_: any, index: number) => ({ length: 92, offset: 92 * index, index }),
+    (_: any, index: number) => ({
+      length: CARD_ROW_HEIGHT,
+      offset: CARD_ROW_HEIGHT * index,
+      index,
+    }),
     [],
   );
 
   const TOP_PADDING = insets.top;
 
   // ── Early returns (after all hooks) ─────────────────────────
-  if (loading) return <Loader />;
+  if (loading) {
+    return (
+      <SongsLoadingSkeleton
+        topPadding={TOP_PADDING}
+        bg={C.bg}
+        surface={C.surface}
+        border={C.border}
+      />
+    );
+  }
 
   if (error && songs.length === 0) {
     return (
@@ -379,90 +699,107 @@ function SongsTabComponent({ onOpenSong, scrollOffsetRef }: Props) {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: C.bg, paddingTop: TOP_PADDING }}>
-      {/* ── SEARCH ────────────────────────────── */}
-      <View
-        style={{
-          paddingHorizontal: Spacing.lg,
-          paddingTop: Spacing.md,
-          paddingBottom: 6,
-        }}>
+    <View style={{ flex: 1, backgroundColor: C.bg }}>
+      {/* ── COLLAPSING HEADER: search + singer pills ─────────── */}
+      <Animated.View
+        pointerEvents="box-none"
+        style={[
+          hs.headerWrap,
+          {
+            paddingTop: TOP_PADDING,
+            backgroundColor: C.bg,
+            transform: [{ translateY: headerTranslateY }],
+            opacity: headerOpacity,
+          },
+        ]}>
+        {/* ── SEARCH ────────────────────────────── */}
         <View
-          style={[
-            ss.searchBox,
-            {
-              backgroundColor: C.surface,
-              borderColor: C.border,
-              ...Platform.select({
-                ios: {
-                  shadowColor: isDark ? C.sky : C.navy,
-                  shadowOpacity: isDark ? 0.1 : 0.06,
-                },
-                android: {},
-              }),
-            },
-          ]}>
-          <Feather name="search" size={17} color={C.sky} />
-          <TextInput
-            style={[ss.searchInput, { color: C.text }]}
-            value={query}
-            onChangeText={setQuery}
-            placeholder={t.search}
-            placeholderTextColor={C.text3}
-          />
-          {query ? (
-            <TouchableOpacity onPress={() => setQuery("")} activeOpacity={0.7}>
-              <Feather name="x" size={16} color={C.text3} />
-            </TouchableOpacity>
-          ) : null}
+          style={{
+            paddingHorizontal: Spacing.lg,
+            paddingTop: Spacing.md,
+            paddingBottom: 6,
+          }}>
+          <View
+            style={[
+              ss.searchBox,
+              {
+                backgroundColor: C.surface,
+                borderColor: C.border,
+                ...Platform.select({
+                  ios: {
+                    shadowColor: isDark ? C.sky : C.navy,
+                    shadowOpacity: isDark ? 0.1 : 0.06,
+                  },
+                  android: {},
+                }),
+              },
+            ]}>
+            <Feather name="search" size={17} color={C.sky} />
+            <TextInput
+              style={[ss.searchInput, { color: C.text }]}
+              value={query}
+              onChangeText={setQuery}
+              placeholder={t.search}
+              placeholderTextColor={C.text3}
+            />
+            {query ? (
+              <TouchableOpacity
+                onPress={() => setQuery("")}
+                activeOpacity={0.7}>
+                <Feather name="x" size={16} color={C.text3} />
+              </TouchableOpacity>
+            ) : null}
+          </View>
         </View>
-      </View>
 
-      {/* ── SINGER PILLS ──────────────────────── */}
-      <View style={{ paddingTop: 10, paddingBottom: 6 }}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={ss.pillsContent}>
-          {singers.map((s) => (
-            <TouchableOpacity
-              key={s}
-              style={[
-                ss.pill,
-                {
-                  borderColor: singerFilter === s ? "transparent" : C.skyBorder,
-                  backgroundColor:
-                    singerFilter === s
-                      ? "transparent"
-                      : isDark
-                        ? C.glass
-                        : C.surface,
-                },
-              ]}
-              onPress={() => setSingerFilter(s)}
-              activeOpacity={0.75}>
-              {singerFilter === s ? (
-                <LinearGradient
-                  colors={[C.sky, C.skyDeep]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={ss.pillGradient}>
-                  <Text style={[ss.pillTextOn, { color: C.bg }]}>{s}</Text>
-                </LinearGradient>
-              ) : (
-                <Text style={[ss.pillText, { color: C.text2 }]}>{s}</Text>
-              )}
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
+        {/* ── SINGER PILLS ──────────────────────── */}
+        <View style={{ paddingTop: 10, paddingBottom: 6 }}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={ss.pillsContent}>
+            {singers.map((s) => (
+              <TouchableOpacity
+                key={s}
+                style={[
+                  ss.pill,
+                  {
+                    borderColor:
+                      singerFilter === s ? "transparent" : C.skyBorder,
+                    backgroundColor:
+                      singerFilter === s
+                        ? "transparent"
+                        : isDark
+                          ? C.glass
+                          : C.surface,
+                  },
+                ]}
+                onPress={() => setSingerFilter(s)}
+                activeOpacity={0.75}>
+                {singerFilter === s ? (
+                  <LinearGradient
+                    colors={[C.sky, C.skyDeep]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={ss.pillGradient}>
+                    <Text style={[ss.pillTextOn, { color: C.bg }]}>{s}</Text>
+                  </LinearGradient>
+                ) : (
+                  <Text style={[ss.pillText, { color: C.text2 }]}>{s}</Text>
+                )}
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      </Animated.View>
 
       {/* ── SONG LIST ─────────────────────────── */}
-      <FlatList
+      <AnimatedFlatList
         ref={listRef}
         data={filtered}
         keyExtractor={(item) => item._id}
         renderItem={renderSongItem}
+        style={{ opacity: listFade }}
         ListEmptyComponent={
           <EmptyState
             icon={<Feather name="music" size={22} color={C.sky} />}
@@ -474,22 +811,35 @@ function SongsTabComponent({ onOpenSong, scrollOffsetRef }: Props) {
             refreshing={refreshing}
             onRefresh={onRefresh}
             tintColor={C.sky}
+            progressViewOffset={TOP_PADDING + HEADER_HEIGHT}
           />
         }
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={ss.listContent}
-        removeClippedSubviews
-        maxToRenderPerBatch={10}
-        windowSize={10}
-        initialNumToRender={8}
+        contentContainerStyle={[
+          ss.listContent,
+          { paddingTop: TOP_PADDING + HEADER_HEIGHT + Spacing.sm },
+        ]}
+        removeClippedSubviews={Platform.OS === "android"}
+        maxToRenderPerBatch={12}
+        windowSize={11}
+        initialNumToRender={10}
+        updateCellsBatchingPeriod={50}
         getItemLayout={getItemLayout}
-        onScroll={handleScroll}
+        onScroll={onListScroll}
         scrollEventThrottle={16}
+        onScrollBeginDrag={onScrollBeginDrag}
+        onScrollEndDrag={onScrollEndDrag}
+        onMomentumScrollEnd={onMomentumScrollEnd}
+        onViewableItemsChanged={onViewableItemsChanged}
+        viewabilityConfig={viewabilityConfig}
+        decelerationRate="normal"
+        overScrollMode="always"
+        bounces
         onScrollToIndexFailed={(info) => {
           setTimeout(() => {
             listRef.current?.scrollToIndex({
               index: info.highestMeasuredFrameIndex,
-              animated: false,
+              animated: true,
             });
           }, 100);
         }}
@@ -591,6 +941,16 @@ export default React.memo(SongsTabComponent);
 // ─────────────────────────────────────────────────────────────────────────────
 // StyleSheets
 // ─────────────────────────────────────────────────────────────────────────────
+
+const hs = StyleSheet.create({
+  headerWrap: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 20,
+  },
+});
 
 const ss = StyleSheet.create({
   searchBox: {
@@ -697,6 +1057,34 @@ const ss = StyleSheet.create({
   songNumber: { fontSize: 18, fontWeight: "700", letterSpacing: 0.5 },
   keyChip: { borderRadius: 6, paddingHorizontal: 10, paddingVertical: 4 },
   keyChipText: { fontSize: 11, fontWeight: "700" },
+
+  skeletonSearch: {
+    height: 44,
+    borderRadius: 14,
+    borderWidth: 1,
+    marginBottom: 10,
+  },
+  skeletonPills: {
+    flexDirection: "row",
+    paddingHorizontal: Spacing.lg,
+    gap: 8,
+    paddingVertical: 10,
+  },
+  skeletonPill: {
+    height: 38,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  skeletonList: {
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.sm,
+    gap: Spacing.md,
+  },
+  skeletonCard: {
+    height: 92,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
 });
 
 const es = StyleSheet.create({

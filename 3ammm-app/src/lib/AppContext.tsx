@@ -10,6 +10,7 @@ import {
   Animated,
   Easing,
   Image,
+  Platform,
   StyleSheet,
   Text,
   useWindowDimensions,
@@ -391,23 +392,25 @@ export function AppProvider({ children }: AppProviderProps) {
   async function signInWithGoogle() {
     setAuthError("");
     try {
-      // Initiate Google OAuth flow
       const authResponse = await initiateGoogleAuth(GOOGLE_AUTH_CLIENT_ID);
 
-      if (authResponse && authResponse.access_token) {
-        // For authorization code flow, we need to exchange the code on the backend
-        // The backend will handle the token exchange with Google
-        const { token, user } = await api.auth.googleAuth(
-          authResponse.access_token,
-          "", // Email will be fetched by backend
-          "", // Name will be fetched by backend
-        );
+      // Web redirects away; native cancel/dismiss returns null.
+      if (Platform.OS === "web") return;
 
-        await saveToken(token);
-        setProfile(user);
-        await registerForPushNotificationsOnSignUp(user.name).catch(() => {});
-        await AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(user));
+      if (!authResponse?.access_token) {
+        throw new Error("Google sign-in was cancelled.");
       }
+
+      const { token, user } = await api.auth.googleAuth(
+        authResponse.access_token,
+        "",
+        "",
+      );
+
+      await saveToken(token);
+      setProfile(user);
+      await registerForPushNotificationsOnSignUp(user.name).catch(() => {});
+      await AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(user));
     } catch (err: any) {
       setAuthError(err.message || "Google sign-in failed");
       throw err;
@@ -415,7 +418,11 @@ export function AppProvider({ children }: AppProviderProps) {
   }
 
   async function loginAsGuest() {
+    setAuthError("");
     try {
+      // Drop any real JWT so guest mode is not overwritten on next launch.
+      await clearToken();
+
       const guestProfile: Profile = {
         _id: "guest_" + Date.now(),
         name: "Guest User",

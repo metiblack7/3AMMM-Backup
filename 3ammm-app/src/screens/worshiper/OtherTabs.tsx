@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import {
   View,
   ScrollView,
@@ -8,6 +8,8 @@ import {
   TouchableOpacity,
   Platform,
   StatusBar,
+  Animated,
+  Easing,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
@@ -41,6 +43,115 @@ interface SongProps {
   onBackToSongs?: () => void;
 }
 
+const STAGGER_CAP = 360;
+const STAGGER_STEP = 60;
+
+function staggerDelay(index: number) {
+  return Math.min(index * STAGGER_STEP, STAGGER_CAP);
+}
+
+function FadeSlideIn({
+  index,
+  children,
+  style,
+}: {
+  index: number;
+  children: React.ReactNode;
+  style?: object;
+}) {
+  const opacity = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(24)).current;
+
+  useEffect(() => {
+    opacity.setValue(0);
+    translateY.setValue(24);
+
+    const delay = staggerDelay(index);
+    Animated.parallel([
+      Animated.timing(opacity, {
+        toValue: 1,
+        duration: 420,
+        delay,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.spring(translateY, {
+        toValue: 0,
+        speed: 14,
+        bounciness: 5,
+        delay,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [index, opacity, translateY]);
+
+  return (
+    <Animated.View style={[style, { opacity, transform: [{ translateY }] }]}>
+      {children}
+    </Animated.View>
+  );
+}
+
+function TabLoadingSkeleton({
+  bg,
+  surface,
+  border,
+  topPadding,
+  cardHeight = 120,
+  count = 4,
+}: {
+  bg: string;
+  surface: string;
+  border: string;
+  topPadding: number;
+  cardHeight?: number;
+  count?: number;
+}) {
+  const pulse = useRef(new Animated.Value(0.4)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, {
+          toValue: 1,
+          duration: 900,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulse, {
+          toValue: 0.4,
+          duration: 900,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse]);
+
+  return (
+    <View style={{ flex: 1, backgroundColor: bg, paddingTop: topPadding }}>
+      <View style={{ paddingHorizontal: Spacing.lg, gap: Spacing.md }}>
+        {Array.from({ length: count }).map((_, i) => (
+          <Animated.View
+            key={i}
+            style={[
+              styles.skeletonCard,
+              {
+                height: cardHeight,
+                backgroundColor: surface,
+                borderColor: border,
+                opacity: pulse,
+              },
+            ]}
+          />
+        ))}
+      </View>
+    </View>
+  );
+}
+
 // ── SETLISTS TAB ──────────────────────────────────────────────
 function SetlistsTabComponent({ onOpenSong }: SongProps) {
   const { t } = useApp();
@@ -48,6 +159,7 @@ function SetlistsTabComponent({ onOpenSong }: SongProps) {
   const [setlists, setSetlists] = useState<Setlist[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const contentFade = useRef(new Animated.Value(0)).current;
 
   const load = useCallback(async () => {
     try {
@@ -63,13 +175,36 @@ function SetlistsTabComponent({ onOpenSong }: SongProps) {
     load();
   }, [load]);
 
+  useEffect(() => {
+    if (loading) return;
+    contentFade.setValue(0);
+    Animated.timing(contentFade, {
+      toValue: 1,
+      duration: 320,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [loading, contentFade]);
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await load();
     setRefreshing(false);
   }, [load]);
 
-  if (loading) return <Loader />;
+  if (loading) {
+    return (
+      <TabLoadingSkeleton
+        bg={C.bg}
+        surface={C.surface}
+        border={C.border}
+        topPadding={
+          Platform.OS === "ios" ? 50 : (StatusBar.currentHeight ?? 24) + 8
+        }
+        cardHeight={140}
+      />
+    );
+  }
 
   const TOP_PADDING =
     Platform.OS === "ios" ? 50 : (StatusBar.currentHeight ?? 24) + 8;
@@ -79,9 +214,11 @@ function SetlistsTabComponent({ onOpenSong }: SongProps) {
     : [C.surface, C.bgDeep, C.bg];
 
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: C.bg, paddingTop: TOP_PADDING }}
+    <Animated.ScrollView
+      style={{ flex: 1, backgroundColor: C.bg, paddingTop: TOP_PADDING, opacity: contentFade }}
       showsVerticalScrollIndicator={false}
+      decelerationRate="normal"
+      overScrollMode="always"
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
@@ -97,11 +234,11 @@ function SetlistsTabComponent({ onOpenSong }: SongProps) {
           text="No setlists yet."
         />
       ) : (
-        setlists.map((sl) => {
+        setlists.map((sl, slIndex) => {
           const songs = sl.songIds || [];
 
           return (
-            <View key={sl._id} style={styles.cardWrap}>
+            <FadeSlideIn key={sl._id} index={slIndex} style={styles.cardWrap}>
               <BlurView
                 intensity={isDark ? 85 : 60}
                 style={styles.blurContainer}>
@@ -200,13 +337,13 @@ function SetlistsTabComponent({ onOpenSong }: SongProps) {
                   ))}
                 </LinearGradient>
               </BlurView>
-            </View>
+            </FadeSlideIn>
           );
         })
       )}
 
       <View style={{ height: 20 }} />
-    </ScrollView>
+    </Animated.ScrollView>
   );
 }
 
@@ -229,6 +366,7 @@ function FavoritesTabComponent({
   const [songs, setSongs] = useState<FavoriteSong[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const contentFade = useRef(new Animated.Value(0)).current;
 
   const load = useCallback(async () => {
     try {
@@ -243,6 +381,17 @@ function FavoritesTabComponent({
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (loading) return;
+    contentFade.setValue(0);
+    Animated.timing(contentFade, {
+      toValue: 1,
+      duration: 320,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [loading, contentFade]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -259,7 +408,37 @@ function FavoritesTabComponent({
     [allSongs],
   );
 
-  if (loading) return <Loader />;
+  if (loading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: C.bg }}>
+        <View
+          style={[
+            styles.favHeaderBar,
+            {
+              paddingTop:
+                Platform.OS === "ios"
+                  ? 50
+                  : (StatusBar.currentHeight ?? 24) + 8,
+              backgroundColor: C.bg,
+              borderBottomColor: isDark ? C.glassBorder : C.border,
+            },
+          ]}>
+          <View style={[styles.backButton, { opacity: 0.35 }]} />
+          <Text style={[styles.favHeaderTitle, { color: C.text3 }]}>
+            {t.favs}
+          </Text>
+          <View style={styles.headerRightSpace} />
+        </View>
+        <TabLoadingSkeleton
+          bg={C.bg}
+          surface={C.surface}
+          border={C.border}
+          topPadding={Spacing.md}
+          cardHeight={110}
+        />
+      </View>
+    );
+  }
 
   const TOP_PADDING =
     Platform.OS === "ios" ? 50 : (StatusBar.currentHeight ?? 24) + 8;
@@ -301,9 +480,11 @@ function FavoritesTabComponent({
         <View style={styles.headerRightSpace} />
       </View>
 
-      <ScrollView
-        style={{ flex: 1, backgroundColor: C.bg }}
+      <Animated.ScrollView
+        style={{ flex: 1, backgroundColor: C.bg, opacity: contentFade }}
         showsVerticalScrollIndicator={false}
+        decelerationRate="normal"
+        overScrollMode="always"
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -327,11 +508,10 @@ function FavoritesTabComponent({
               const pageNumber = getPageNumber(song, index);
 
               return (
-                <TouchableOpacity
-                  key={song._id}
-                  style={styles.favCardWrap}
-                  onPress={() => onOpenSong(song)}
-                  activeOpacity={0.7}>
+                <FadeSlideIn key={song._id} index={index} style={styles.favCardWrap}>
+                  <TouchableOpacity
+                    onPress={() => onOpenSong(song)}
+                    activeOpacity={0.7}>
                   <BlurView
                     intensity={isDark ? 85 : 60}
                     style={styles.blurContainer}>
@@ -418,11 +598,12 @@ function FavoritesTabComponent({
                     </LinearGradient>
                   </BlurView>
                 </TouchableOpacity>
+                </FadeSlideIn>
               );
             })}
           </View>
         )}
-      </ScrollView>
+      </Animated.ScrollView>
     </View>
   );
 }
@@ -823,5 +1004,9 @@ const styles = StyleSheet.create({
   notifTime: {
     fontSize: 11,
     marginTop: 6,
+  },
+  skeletonCard: {
+    borderRadius: Radius.lg,
+    borderWidth: 1,
   },
 });

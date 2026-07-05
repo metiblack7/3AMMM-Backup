@@ -1,17 +1,15 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef } from "react";
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
   KeyboardAvoidingView,
-  Keyboard,
   Platform,
   StyleSheet,
   TextInput,
   StatusBar,
-  Animated,
-  Easing,
+  Image,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -88,6 +86,9 @@ function GlassField({
           secureTextEntry={secureTextEntry && !revealed}
           keyboardType={keyboardType}
           autoCapitalize={autoCapitalize ?? "none"}
+          autoCorrect={false}
+          returnKeyType="done"
+          blurOnSubmit={false}
           onFocus={() => {
             setFocused(true);
             onFocusScroll?.();
@@ -180,56 +181,13 @@ export default function LoginScreen({
   const [showEmailLogin, setShowEmailLogin] = useState(false);
 
   const scrollRef = useRef<ScrollView>(null);
-  const keyboardLift = useRef(new Animated.Value(0)).current;
-  const cardLift = useRef(new Animated.Value(0)).current;
 
-  useEffect(() => {
-    const showEvent =
-      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
-    const hideEvent =
-      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
-
-    const showSub = Keyboard.addListener(showEvent as any, (e: any) => {
-      const keyboardHeight = e?.endCoordinates?.height ?? 0;
-
-      Animated.parallel([
-        Animated.timing(keyboardLift, {
-          toValue: -(keyboardHeight * 0.34),
-          duration: Platform.OS === "ios" ? 240 : 180,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
-        Animated.timing(cardLift, {
-          toValue: -24,
-          duration: Platform.OS === "ios" ? 240 : 180,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
-      ]).start();
-    });
-
-    const hideSub = Keyboard.addListener(hideEvent as any, () => {
-      Animated.parallel([
-        Animated.timing(keyboardLift, {
-          toValue: 0,
-          duration: 220,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
-        Animated.timing(cardLift, {
-          toValue: 0,
-          duration: 220,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
-      ]).start();
-    });
-
-    return () => {
-      showSub.remove();
-      hideSub.remove();
-    };
-  }, [keyboardLift, cardLift]);
+  function scrollToInputs() {
+    // Give the keyboard a moment to open, then scroll the fields into view
+    setTimeout(() => {
+      scrollRef.current?.scrollToEnd({ animated: true });
+    }, 150);
+  }
 
   async function handleEmailLogin() {
     if (!email || !password) {
@@ -303,14 +261,11 @@ export default function LoginScreen({
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior="padding"
-        keyboardVerticalOffset={insets.top + 10}>
-        <Animated.ScrollView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? insets.top + 10 : 0}>
+        <ScrollView
           ref={scrollRef}
-          style={{
-            flex: 1,
-            transform: [{ translateY: keyboardLift }],
-          }}
+          style={{ flex: 1 }}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
@@ -318,7 +273,7 @@ export default function LoginScreen({
             s.scrollContent,
             {
               paddingTop: insets.top + 16,
-              paddingBottom: Math.max(insets.bottom + 180, 220),
+              paddingBottom: Math.max(insets.bottom + 60, 100),
             },
           ]}>
           {/* ── LANG TOGGLE ──────────────────────────── */}
@@ -342,39 +297,13 @@ export default function LoginScreen({
             </TouchableOpacity>
           </View>
 
-          {/* ── HERO ─────────────────────────────────── */}
+          {/* ── HERO (logo only) ─────────────────────── */}
           <View style={s.hero}>
-            <View
-              style={[
-                s.iconCircle,
-                {
-                  borderColor: C.skyBorder,
-                  backgroundColor: isDark
-                    ? "rgba(135,206,235,0.10)"
-                    : "rgba(135,206,235,0.18)",
-                },
-              ]}>
-              <Feather name="music" size={30} color={C.sky} />
-            </View>
-
-            <Text
-              style={[
-                s.brand,
-                {
-                  color: C.sky,
-                  textShadowColor: isDark
-                    ? "rgba(135,206,235,0.40)"
-                    : "rgba(4,57,84,0.12)",
-                  textShadowOffset: { width: 0, height: 0 },
-                  textShadowRadius: 18,
-                },
-              ]}>
-              SABA
-            </Text>
-
-            <Text style={[s.tagline, { color: C.text2 }]}>
-              Wolaitegna Songs Lyrics App
-            </Text>
+            <Image
+              source={require("../../assets/favicon.png")}
+              style={s.logoImage}
+              resizeMode="contain"
+            />
 
             <LinearGradient
               colors={[
@@ -389,7 +318,7 @@ export default function LoginScreen({
           </View>
 
           {/* ── LOGIN CARD ───────────────────────────── */}
-          <Animated.View
+          <View
             style={[
               s.card,
               {
@@ -399,7 +328,6 @@ export default function LoginScreen({
                 borderColor: isDark
                   ? "rgba(135,206,235,0.12)"
                   : "rgba(4,57,84,0.10)",
-                transform: [{ translateY: cardLift }],
               },
             ]}>
             <LinearGradient
@@ -505,12 +433,7 @@ export default function LoginScreen({
                   placeholder="your@email.com"
                   keyboardType="email-address"
                   colors={C}
-                  onFocusScroll={() => {
-                    scrollRef.current?.scrollTo({
-                      y: 120,
-                      animated: true,
-                    });
-                  }}
+                  onFocusScroll={scrollToInputs}
                 />
 
                 <GlassField
@@ -521,12 +444,7 @@ export default function LoginScreen({
                   placeholder="••••••••"
                   secureTextEntry
                   colors={C}
-                  onFocusScroll={() => {
-                    scrollRef.current?.scrollTo({
-                      y: 180,
-                      animated: true,
-                    });
-                  }}
+                  onFocusScroll={scrollToInputs}
                 />
 
                 <TouchableOpacity
@@ -563,7 +481,7 @@ export default function LoginScreen({
                 </Text>
               </TouchableOpacity>
             </View>
-          </Animated.View>
+          </View>
 
           {/* ── FOOTER ───────────────────────────────── */}
           <View style={s.footer}>
@@ -573,7 +491,7 @@ export default function LoginScreen({
             </Text>
             <View style={[s.footerLine, { backgroundColor: C.border }]} />
           </View>
-        </Animated.ScrollView>
+        </ScrollView>
       </KeyboardAvoidingView>
     </View>
   );
@@ -612,27 +530,10 @@ const s = StyleSheet.create({
     paddingTop: 20,
     paddingBottom: 28,
   },
-  iconCircle: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
+  logoImage: {
+    width: 110,
+    height: 110,
     marginBottom: 18,
-  },
-  brand: {
-    fontSize: 46,
-    fontWeight: "800",
-    letterSpacing: 10,
-    marginBottom: 6,
-  },
-  tagline: {
-    fontSize: 12,
-    fontWeight: "600",
-    letterSpacing: 2.5,
-    textTransform: "uppercase",
-    marginBottom: 20,
   },
   heroDivider: {
     width: 80,

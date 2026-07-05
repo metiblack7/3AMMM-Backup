@@ -804,6 +804,16 @@ export default function LyricsScreen({
 
           {song.lyrics.map((section, i) => (
             <View key={i} style={s.section}>
+              {/* Extra breathing room above the golden bar for every
+                  section after the first — sized to two lyric lines
+                  so it scales correctly with font size / line spacing. */}
+              {i > 0 && (
+                <View
+                  style={{
+                    height: (fontSize ?? 20) * (lineSpacing ?? 1.9) * 2,
+                  }}
+                />
+              )}
               <SectionLabel label={section.s} color={LABEL_COLOR} />
               <Text
                 style={[

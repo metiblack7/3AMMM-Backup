@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import {
   View,
   FlatList,
@@ -150,7 +150,7 @@ export default function AdminSongsTab() {
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [singerFilter, setSingerFilter] = useState("All");
-  const [singers, setSingers] = useState<string[]>(["All"]);
+  const [singersRaw, setSingersRaw] = useState<string[]>([]);
   const [activeSong, setActiveSong] = useState<Song | null>(null);
   const [modalSong, setModalSong] = useState<Song | null | undefined>(
     undefined,
@@ -161,6 +161,18 @@ export default function AdminSongsTab() {
   const [formSinger, setFormSinger] = useState("");
   const [formLyrics, setFormLyrics] = useState("");
   const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // ── Clean, de-duplicated, guaranteed-non-blank singer list.
+  // Fixes: pills rendering with no visible label when the API
+  // returns empty/whitespace/duplicate singer names.
+  const singers = useMemo(() => {
+    const clean = singersRaw
+      .map((s) => (s ?? "").trim())
+      .filter((s) => s.length > 0);
+    const unique = Array.from(new Set(clean));
+    return ["All", ...unique];
+  }, [singersRaw]);
 
   const load = useCallback(async () => {
     try {
@@ -169,7 +181,7 @@ export default function AdminSongsTab() {
         api.songs.getSingers(),
       ]);
       setSongs(songsData);
-      setSingers(["All", ...singersData]);
+      setSingersRaw(singersData ?? []);
     } catch (err) {
       console.error("Load error:", err);
     } finally {
@@ -195,7 +207,7 @@ export default function AdminSongsTab() {
   }
 
   async function handleSave() {
-    if (!formTitle) {
+    if (!formTitle.trim()) {
       Alert.alert("Error", "Song title is required.");
       return;
     }
@@ -204,10 +216,10 @@ export default function AdminSongsTab() {
     const lyricsToSave =
       parsedLyrics.length > 0 ? parsedLyrics : [{ s: "", t: "" }];
     const payload = {
-      title: formTitle,
+      title: formTitle.trim(),
       key: formKey || "C",
       tempo: "Medium",
-      singerName: formSinger || "Unknown",
+      singerName: formSinger.trim() || "Unknown",
       category: "Worship",
       lyrics: lyricsToSave,
     };
@@ -224,27 +236,30 @@ export default function AdminSongsTab() {
   }
 
   async function handleDelete(song: Song) {
-    Alert.alert("Delete song", `Delete "${song.title}"?`, [
-      { text: t.cancel, style: "cancel" },
-      {
-        text: t.delete,
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await api.songs.delete(song._id);
-            load();
-          } catch (err: any) {
-            Alert.alert("Error", err.message);
-          }
+    Alert.alert(
+      "Delete song",
+      `Delete "${song.title}"? This can't be undone.`,
+      [
+        { text: t.cancel, style: "cancel" },
+        {
+          text: t.delete,
+          style: "destructive",
+          onPress: async () => {
+            setDeletingId(song._id);
+            try {
+              await api.songs.delete(song._id);
+              load();
+            } catch (err: any) {
+              Alert.alert("Error", err.message);
+            } finally {
+              setDeletingId(null);
+            }
+          },
         },
-      },
-    ]);
+      ],
+    );
   }
 
-  if (activeSong)
-    return (
-      <LyricsScreen song={activeSong} onBack={() => setActiveSong(null)} />
-    );
   if (loading) return <Loader />;
 
   const filtered = songs.filter(
@@ -255,148 +270,212 @@ export default function AdminSongsTab() {
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
-      {/* ── SEARCH — rounded pill, icon prefix, like reference ── */}
-      <View
-        style={{
-          paddingHorizontal: Spacing.lg,
-          paddingTop: Spacing.md,
-          paddingBottom: 4,
-        }}>
+      {/* ── LIST VIEW — stays mounted behind the lyrics overlay
+          so scroll position + filters survive opening a song ── */}
+      <View style={[{ flex: 1 }, activeSong && styles.hidden]}>
+        {/* ── SEARCH ──────────────────────────────────── */}
         <View
-          style={[
-            ss.searchBox,
-            { backgroundColor: C.surface, borderColor: C.border },
-          ]}>
-          <Feather name="search" size={17} color={C.sky} />
-          <TextInput
-            style={[ss.searchInput, { color: C.text }]}
-            value={query}
-            onChangeText={setQuery}
-            placeholder={t.search ?? "Search songs..."}
-            placeholderTextColor={C.text3}
-          />
-          {query ? (
-            <TouchableOpacity onPress={() => setQuery("")}>
-              <Feather name="x" size={15} color={C.text3} />
-            </TouchableOpacity>
-          ) : null}
-        </View>
-      </View>
-
-      {/* ── SINGER PILLS — rounded full pills, sky active ── */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={{ flexGrow: 0, paddingVertical: 12 }}
-        contentContainerStyle={{ paddingHorizontal: Spacing.lg, gap: 8 }}>
-        {singers.map((sg) => {
-          const active = singerFilter === sg;
-          return (
-            <TouchableOpacity
-              key={sg}
-              style={[
-                ss.pill,
-                {
-                  borderColor: active ? "transparent" : C.border,
-                  backgroundColor: active ? C.sky : C.surface,
-                },
-              ]}
-              onPress={() => setSingerFilter(sg)}
-              activeOpacity={0.8}>
-              <Text
-                style={[ss.pillText, { color: active ? C.bg : C.text2 }]}
-                numberOfLines={1}>
-                {sg}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
-
-      {/* ── SONG LIST — rounded cards, number + key row, chevron ── */}
-      <FlatList
-        data={filtered}
-        keyExtractor={(item) => item._id}
-        contentContainerStyle={{
-          paddingHorizontal: Spacing.lg,
-          paddingBottom: 4,
-          gap: 10,
-        }}
-        renderItem={({ item, index }) => (
+          style={{
+            paddingHorizontal: Spacing.lg,
+            paddingTop: Spacing.md,
+            paddingBottom: 4,
+          }}>
           <View
             style={[
-              ss.card,
+              ss.searchBox,
               { backgroundColor: C.surface, borderColor: C.border },
             ]}>
-            {/* Tap row → opens lyrics, edit/delete in corner */}
-            <TouchableOpacity
-              style={ss.cardTop}
-              onPress={() => setActiveSong(item)}
-              activeOpacity={0.7}>
-              <View style={[ss.art, { backgroundColor: C.skyPale }]}>
-                <Feather name="music" size={18} color={C.sky} />
-              </View>
-              <View style={ss.si}>
-                <Text style={[ss.siTitle, { color: C.text }]} numberOfLines={1}>
-                  {item.title}
-                </Text>
-                <Text style={[ss.siMeta, { color: C.text2 }]} numberOfLines={1}>
-                  {item.singerName}
-                </Text>
-              </View>
-              <Feather name="chevron-right" size={18} color={C.text3} />
-            </TouchableOpacity>
-
-            {/* Bottom row — number left, key badge + actions right */}
-            <View style={[ss.cardBottom, { borderTopColor: C.border }]}>
-              <Text style={[ss.indexNum, { color: C.text3 }]}>{index + 1}</Text>
-
-              <View style={ss.bottomRight}>
-                <View style={[ss.keyChip, { backgroundColor: C.skyPale }]}>
-                  <Text style={[ss.keyChipText, { color: C.sky }]}>
-                    {item.key}
-                  </Text>
-                </View>
-                <TouchableOpacity
-                  style={[ss.ib, { borderColor: C.border }]}
-                  onPress={() => openModal(item)}>
-                  <Feather name="edit-2" size={13} color={C.text2} />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[ss.ib, { borderColor: C.border }]}
-                  onPress={() => handleDelete(item)}>
-                  <Feather name="trash-2" size={13} color={C.danger} />
-                </TouchableOpacity>
-              </View>
-            </View>
+            <Feather name="search" size={17} color={C.sky} />
+            <TextInput
+              style={[ss.searchInput, { color: C.text }]}
+              value={query}
+              onChangeText={setQuery}
+              placeholder={t.search ?? "Search songs..."}
+              placeholderTextColor={C.text3}
+            />
+            {query ? (
+              <TouchableOpacity onPress={() => setQuery("")}>
+                <Feather name="x" size={15} color={C.text3} />
+              </TouchableOpacity>
+            ) : null}
           </View>
+        </View>
+
+        {/* ── SINGER PILLS — every pill now guaranteed a real
+            label; no more blank pills from empty API data ── */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={{ flexGrow: 0, paddingVertical: 12 }}
+          contentContainerStyle={{
+            paddingHorizontal: Spacing.lg,
+            gap: 8,
+            flexGrow: 1,
+          }}>
+          {singers.map((sg) => {
+            const active = singerFilter === sg;
+            return (
+              <TouchableOpacity
+                key={sg}
+                style={[
+                  ss.pill,
+                  {
+                    borderColor: active ? "transparent" : C.border,
+                    backgroundColor: active ? C.sky : C.surface,
+                  },
+                ]}
+                onPress={() => setSingerFilter(sg)}
+                activeOpacity={0.8}>
+                <Text
+                  style={[ss.pillText, { color: active ? C.bg : C.text2 }]}
+                  numberOfLines={1}>
+                  {sg}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+
+        {/* Result count — small, helpful context when filtering */}
+        {(query || singerFilter !== "All") && (
+          <Text
+            style={[
+              ss.resultCount,
+              { color: C.text3, paddingHorizontal: Spacing.lg },
+            ]}>
+            {filtered.length} {filtered.length === 1 ? "song" : "songs"} found
+          </Text>
         )}
-        ListEmptyComponent={
-          <EmptyState
-            icon={<Feather name="music" size={22} color={C.sky} />}
-            text="No songs yet."
-          />
-        }
-        ListFooterComponent={
-          <View style={{ paddingTop: 6, paddingBottom: Spacing.lg }}>
-            <TouchableOpacity
-              style={[ss.addBtn, { backgroundColor: C.sky }]}
-              onPress={() => openModal()}
-              activeOpacity={0.85}>
-              <Feather name="plus" size={18} color={C.bg} />
-              <Text style={[ss.addBtnText, { color: C.bg }]}>{t.addSong}</Text>
-            </TouchableOpacity>
-          </View>
-        }
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={C.sky}
-          />
-        }
-        showsVerticalScrollIndicator={false}
-      />
+
+        {/* ── SONG LIST — each card is now one visually solid
+            unit (stronger border + shared background) so it
+            still reads as one card even when scroll position
+            splits it across the top/bottom of the screen ── */}
+        <FlatList
+          data={filtered}
+          keyExtractor={(item) => item._id}
+          contentContainerStyle={{
+            paddingHorizontal: Spacing.lg,
+            paddingTop: 8,
+            paddingBottom: 4,
+            gap: 12,
+          }}
+          renderItem={({ item, index }) => {
+            const isDeleting = deletingId === item._id;
+            return (
+              <View
+                style={[
+                  ss.card,
+                  {
+                    backgroundColor: C.surface,
+                    borderColor: C.sky + "33", // subtle but visible tinted border
+                    opacity: isDeleting ? 0.5 : 1,
+                  },
+                ]}>
+                <TouchableOpacity
+                  style={ss.cardTop}
+                  onPress={() => setActiveSong(item)}
+                  activeOpacity={0.7}
+                  disabled={isDeleting}>
+                  <View style={[ss.numBadge, { backgroundColor: C.skyPale }]}>
+                    <Text style={[ss.numBadgeText, { color: C.sky }]}>
+                      {index + 1}
+                    </Text>
+                  </View>
+                  <View style={ss.si}>
+                    <Text
+                      style={[ss.siTitle, { color: C.text }]}
+                      numberOfLines={1}>
+                      {item.title}
+                    </Text>
+                    <Text
+                      style={[ss.siMeta, { color: C.text2 }]}
+                      numberOfLines={1}>
+                      {item.singerName}
+                    </Text>
+                  </View>
+                  <View style={[ss.keyChip, { backgroundColor: C.skyPale }]}>
+                    <Text style={[ss.keyChipText, { color: C.sky }]}>
+                      {item.key}
+                    </Text>
+                  </View>
+                  <Feather name="chevron-right" size={18} color={C.text3} />
+                </TouchableOpacity>
+
+                <View style={[ss.cardBottom, { borderTopColor: C.border }]}>
+                  <TouchableOpacity
+                    style={[
+                      ss.actionBtn,
+                      { borderColor: C.border, backgroundColor: C.bg },
+                    ]}
+                    onPress={() => openModal(item)}
+                    disabled={isDeleting}
+                    activeOpacity={0.75}>
+                    <Feather name="edit-2" size={13} color={C.text2} />
+                    <Text style={[ss.actionBtnText, { color: C.text2 }]}>
+                      Edit
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      ss.actionBtn,
+                      { borderColor: C.danger + "55", backgroundColor: C.bg },
+                    ]}
+                    onPress={() => handleDelete(item)}
+                    disabled={isDeleting}
+                    activeOpacity={0.75}>
+                    <Feather name="trash-2" size={13} color={C.danger} />
+                    <Text style={[ss.actionBtnText, { color: C.danger }]}>
+                      Delete
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            );
+          }}
+          ListEmptyComponent={
+            <EmptyState
+              icon={<Feather name="music" size={22} color={C.sky} />}
+              text={
+                query || singerFilter !== "All"
+                  ? "No songs match your search."
+                  : "No songs yet."
+              }
+            />
+          }
+          ListFooterComponent={
+            <View style={{ paddingTop: 6, paddingBottom: Spacing.lg }}>
+              <TouchableOpacity
+                style={[ss.addBtn, { backgroundColor: C.sky }]}
+                onPress={() => openModal()}
+                activeOpacity={0.85}>
+                <Feather name="plus" size={18} color={C.bg} />
+                <Text style={[ss.addBtnText, { color: C.bg }]}>
+                  {t.addSong}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          }
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={C.sky}
+            />
+          }
+          showsVerticalScrollIndicator={false}
+        />
+      </View>
+
+      {/* ── LYRICS OVERLAY ────────────────────────────────
+          Sits on top of (not instead of) the list, so the
+          list underneath never unmounts and keeps its scroll
+          position when you go back. ────────────────────── */}
+      {activeSong && (
+        <View style={StyleSheet.absoluteFill}>
+          <LyricsScreen song={activeSong} onBack={() => setActiveSong(null)} />
+        </View>
+      )}
 
       {/* ── ADD / EDIT MODAL ─────────────────────────────── */}
       <Modal
@@ -503,6 +582,12 @@ export default function AdminSongsTab() {
   );
 }
 
+const styles = StyleSheet.create({
+  hidden: {
+    display: "none",
+  },
+});
+
 const ss = StyleSheet.create({
   searchBox: {
     flexDirection: "row",
@@ -515,35 +600,42 @@ const ss = StyleSheet.create({
   },
   searchInput: { flex: 1, fontSize: 15 },
 
+  resultCount: { fontSize: 11, fontWeight: "500", marginBottom: 4 },
+
   pill: {
     paddingHorizontal: 16,
     paddingVertical: 9,
     borderRadius: 999,
     borderWidth: 1,
-    maxWidth: 220,
+    minWidth: 48,
+    alignItems: "center",
+    justifyContent: "center",
   },
   pillText: { fontSize: 13, fontWeight: "600" },
 
-  // ── Song card — rounded, two-row layout matching reference ──
+  // ── Song card — one clearly bounded unit; a tinted border
+  // (instead of the near-invisible neutral one) so it reads
+  // as a single card even when scroll splits it top/bottom.
   card: {
     borderRadius: 16,
-    borderWidth: 1,
+    borderWidth: 1.5,
     overflow: "hidden",
   },
   cardTop: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
+    gap: 10,
     paddingHorizontal: 14,
     paddingVertical: 13,
   },
-  art: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
+  numBadge: {
+    width: 30,
+    height: 30,
+    borderRadius: 9,
     alignItems: "center",
     justifyContent: "center",
   },
+  numBadgeText: { fontSize: 13, fontWeight: "700" },
   si: { flex: 1, minWidth: 0 },
   siTitle: { fontSize: 15, fontWeight: "700" },
   siMeta: { fontSize: 12, marginTop: 2 },
@@ -551,24 +643,25 @@ const ss = StyleSheet.create({
   cardBottom: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    justifyContent: "flex-end",
+    gap: 8,
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderTopWidth: 1,
   },
-  indexNum: { fontSize: 18, fontWeight: "700" },
-  bottomRight: { flexDirection: "row", alignItems: "center", gap: 8 },
-
-  keyChip: { borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 },
+  keyChip: { borderRadius: 8, paddingHorizontal: 9, paddingVertical: 5 },
   keyChipText: { fontSize: 12, fontWeight: "700" },
-  ib: {
-    width: 30,
-    height: 30,
-    borderRadius: 8,
-    borderWidth: 1,
+
+  actionBtn: {
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    height: 32,
+    borderRadius: 9,
+    borderWidth: 1,
   },
+  actionBtnText: { fontSize: 12, fontWeight: "600" },
 
   addBtn: {
     borderRadius: Radius.md,

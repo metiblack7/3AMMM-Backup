@@ -6,6 +6,7 @@ import {
   StatusBar,
   TouchableOpacity,
   Animated,
+  Easing,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
@@ -50,6 +51,9 @@ export default function WorshiperApp() {
   const [activeTab, setActiveTab] = useState<WTab>("home");
   const tabOpacity = useRef(
     TABS.map((_, i) => new Animated.Value(i === 0 ? 1 : 0)),
+  ).current;
+  const tabTranslate = useRef(
+    TABS.map((_, i) => new Animated.Value(i === 0 ? 0 : 14)),
   ).current;
 
   const loadSongs = useCallback(async () => {
@@ -98,22 +102,41 @@ export default function WorshiperApp() {
 
       const prevIndex = TABS.findIndex((t) => t.key === activeTab);
       if (prevIndex !== -1) {
-        Animated.timing(tabOpacity[prevIndex], {
-          toValue: 0,
-          duration: 150,
-          useNativeDriver: true,
-        }).start();
+        Animated.parallel([
+          Animated.timing(tabOpacity[prevIndex], {
+            toValue: 0,
+            duration: 220,
+            easing: Easing.in(Easing.cubic),
+            useNativeDriver: true,
+          }),
+          Animated.timing(tabTranslate[prevIndex], {
+            toValue: -10,
+            duration: 220,
+            easing: Easing.in(Easing.cubic),
+            useNativeDriver: true,
+          }),
+        ]).start();
       }
 
-      Animated.timing(tabOpacity[index], {
-        toValue: 1,
-        duration: 200,
-        useNativeDriver: true,
-      }).start();
+      tabTranslate[index].setValue(14);
+      Animated.parallel([
+        Animated.timing(tabOpacity[index], {
+          toValue: 1,
+          duration: 300,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.spring(tabTranslate[index], {
+          toValue: 0,
+          speed: 16,
+          bounciness: 4,
+          useNativeDriver: true,
+        }),
+      ]).start();
 
       setActiveTab(tab);
     },
-    [activeTab, tabOpacity],
+    [activeTab, tabOpacity, tabTranslate],
   );
 
   const pillGradient: [string, string] = isDark
@@ -144,7 +167,10 @@ export default function WorshiperApp() {
             key={tab.key}
             style={[
               styles.tabLayer,
-              { opacity: tabOpacity[index] },
+              {
+                opacity: tabOpacity[index],
+                transform: [{ translateY: tabTranslate[index] }],
+              },
               activeTab !== tab.key && styles.tabBehind,
             ]}>
             {tab.key === "home" && (
@@ -159,24 +185,19 @@ export default function WorshiperApp() {
 
             {tab.key === "songs" && (
               <SongsTab
-                songs={allSongs}
-                singers={singers}
-                loading={loading}
-                error={error}
-                refresh={loadSongs}
                 onOpenSong={openSong}
                 scrollOffsetRef={songsScrollOffset}
               />
             )}
 
             {tab.key === "setlists" && <SetlistsTab onOpenSong={openSong} />}
-          {tab.key === "favs" && (
-  <FavoritesTab
-    onOpenSong={openSong}
-    onBackToSongs={() => handleTabPress("songs", 1)}
-    allSongs={allSongs}
-  />
-)}
+            {tab.key === "favs" && (
+              <FavoritesTab
+                onOpenSong={openSong}
+                onBackToSongs={() => handleTabPress("songs", 1)}
+                allSongs={allSongs}
+              />
+            )}
             {tab.key === "settings" && <SettingsTab />}
           </Animated.View>
         ))}
@@ -228,10 +249,7 @@ export default function WorshiperApp() {
           </View>
 
           <View
-            style={[
-              styles.pillTopEdge,
-              { backgroundColor: pillTopEdgeBg },
-            ]}
+            style={[styles.pillTopEdge, { backgroundColor: pillTopEdgeBg }]}
           />
 
           <View style={styles.tabBarRow}>
