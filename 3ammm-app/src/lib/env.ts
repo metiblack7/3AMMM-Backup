@@ -12,8 +12,8 @@ const ENV: Environment = __DEV__ ? 'development' : 'production';
 // In production: use your server's public IP/domain
 
 const API_URLS = {
-  development: 'http://localhost:5000',
-  production: 'https://api-production-5981.up.railway.app',
+  development: process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000',
+  production: process.env.EXPO_PUBLIC_API_URL || 'https://YOUR-PROJECT.vercel.app',
 };
 
 export const API_URL = API_URLS[ENV];

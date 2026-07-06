@@ -4,7 +4,6 @@ const { protect, adminOnly } = require('../middleware/auth');
 
 const router = express.Router();
 
-// POST /api/feedback — submit feedback from authenticated user
 router.post('/', protect, async (req, res) => {
   try {
     const { message, email } = req.body;
@@ -26,7 +25,6 @@ router.post('/', protect, async (req, res) => {
   }
 });
 
-// GET /api/feedback — admin: get all feedback
 router.get('/', protect, adminOnly, async (req, res) => {
   try {
     const feedback = await Feedback.find()

@@ -187,13 +187,12 @@ src/
 
 ## Deploying to the cloud (so team can use anywhere)
 
-When ready to go live, deploy the server to **Railway** (free tier):
+Deploy the server to **Vercel**. See `3ammm-server/VERCEL_DEPLOYMENT.md` for full steps.
 
-1. Go to **https://railway.app** → New Project → Deploy from GitHub
-2. Add environment variables (MONGODB_URI, JWT_SECRET, PORT)
-3. Get your public URL (e.g. `https://3ammm-server.up.railway.app`)
-4. Update `API_URL` in the app to that URL
-5. Rebuild with `eas build`
+1. Import repo at [vercel.com/new](https://vercel.com/new), root directory `3ammm-server`
+2. Add env vars (`MONGODB_URI`, `JWT_SECRET`)
+3. Update `3ammm-app/src/lib/env.ts` with your Vercel URL
+4. Rebuild with `eas build`
 
 ---
 

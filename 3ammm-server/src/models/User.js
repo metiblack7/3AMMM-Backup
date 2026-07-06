@@ -41,6 +41,10 @@ const userSchema = new mongoose.Schema({
     type: String,
     default: '#87ceeb',
   },
+  pushToken: {
+    type: String,
+    default: null,
+  },
 }, { timestamps: true });
 
 // Hash password before saving (only if it's provided)

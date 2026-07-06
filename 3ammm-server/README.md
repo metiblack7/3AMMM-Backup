@@ -117,20 +117,24 @@ npx expo start
 ```
 src/
 ├── index.js              ← Express app entry
-├── config/db.js          ← MongoDB connection
+├── config/db.js          ← MongoDB connection (with retries)
 ├── models/
-│   ├── User.js           ← User schema (bcrypt password)
+│   ├── User.js           ← User schema (password + Google OAuth)
 │   ├── Song.js           ← Song + lyrics schema
 │   ├── Setlist.js        ← Setlist schema
-│   └── Favorite.js       ← Favorites + Notifications
+│   ├── Favorite.js       ← Favorites + Notifications
+│   └── Feedback.js       ← User feedback
 ├── routes/
-│   ├── auth.js           ← POST /login, /register, GET /me
+│   ├── auth.js           ← POST /login, /register, /google, GET /me
 │   ├── songs.js          ← Full CRUD (admin write, all read)
 │   ├── setlists.js       ← Full CRUD (admin write, all read)
 │   ├── favorites.js      ← Toggle favorites per user
-│   └── users.js          ← Admin: list members + stats
+│   ├── users.js          ← Admin: list members + stats
+│   └── feedback.js       ← Submit + admin view feedback
 ├── middleware/auth.js    ← JWT protect + adminOnly guards
-└── seed.js               ← Creates admin + 6 songs + 3 setlists
+└── seed.js               ← Creates admin + sample songs + setlists
+api/index.js              ← Vercel serverless entry
+vercel.json               ← Vercel routing config
 ```
 
 ### App (`3ammm-app/`)
@@ -187,13 +191,14 @@ src/
 
 ## Deploying to the cloud (so team can use anywhere)
 
-When ready to go live, deploy the server to **Railway** (free tier):
+Deploy the server to **Vercel** (free tier). See **`VERCEL_DEPLOYMENT.md`** for full steps.
 
-1. Go to **https://railway.app** → New Project → Deploy from GitHub
-2. Add environment variables (MONGODB_URI, JWT_SECRET, PORT)
-3. Get your public URL (e.g. `https://3ammm-server.up.railway.app`)
-4. Update `API_URL` in the app to that URL
-5. Rebuild with `eas build`
+1. Go to [vercel.com/new](https://vercel.com/new) → Import GitHub repo
+2. Set **Root Directory** to `3ammm-server`
+3. Add environment variables (`MONGODB_URI`, `JWT_SECRET`, `NODE_ENV=production`)
+4. Deploy and copy your URL (e.g. `https://3ammm-api.vercel.app`)
+5. Update `3ammm-app/src/lib/env.ts` with that URL
+6. Rebuild with `eas build`
 
 ---
 

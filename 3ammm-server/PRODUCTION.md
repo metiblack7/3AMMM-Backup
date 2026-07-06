@@ -32,7 +32,7 @@ Update `src/lib/env.ts` in your React Native app:
 ```typescript
 const API_URLS = {
   development: 'http://192.168.1.6:5000',
-  production: 'https://your-production-api-url.com',
+  production: 'https://YOUR-PROJECT.vercel.app',
 };
 ```
 
@@ -41,6 +41,7 @@ Replace `https://your-production-api-url.com` with your actual production API UR
 ## Production Deployment Checklist
 
 ### Backend (Server)
+- [ ] Deploy from `3ammm-server/` directory (see `VERCEL_DEPLOYMENT.md`)
 - [ ] Set NODE_ENV=production
 - [ ] Use a proper MongoDB database (Atlas, self-hosted, etc.)
 - [ ] Set a strong JWT_SECRET (use `openssl rand -base64 32`)

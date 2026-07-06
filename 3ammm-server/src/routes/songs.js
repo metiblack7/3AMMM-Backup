@@ -4,21 +4,53 @@ const { protect, adminOnly } = require('../middleware/auth');
 
 const router = express.Router();
 
-// GET /api/songs — all songs (authenticated)
+function performSearch(songs, query) {
+  if (!query) return songs;
+
+  const q = query.toLowerCase();
+  return songs.filter((song) => {
+    const title = song.title.toLowerCase();
+    const lyrics = song.lyrics
+      .map((line) => line.s || line.t || '')
+      .join(' ')
+      .toLowerCase();
+
+    if (title.includes(q) || lyrics.includes(q)) return true;
+
+    const titleWords = title.split(/\s+/);
+    const lyricsWords = lyrics.split(/\s+/);
+    if (titleWords.some((w) => w.startsWith(q))) return true;
+    if (lyricsWords.some((w) => w.startsWith(q))) return true;
+
+    let titleIdx = 0;
+    for (let i = 0; i < q.length; i++) {
+      titleIdx = title.indexOf(q[i], titleIdx);
+      if (titleIdx === -1) return false;
+      titleIdx++;
+    }
+    return true;
+  });
+}
+
 router.get('/', protect, async (req, res) => {
   try {
     const { search, singer } = req.query;
-    const filter = {};
-    if (search) filter.$text = { $search: search };
-    if (singer) filter.singerName = singer;
-    const songs = await Song.find(filter).sort({ title: 1 });
+    let songs = await Song.find().sort({ title: 1 });
+
+    if (singer) {
+      songs = songs.filter((s) => s.singerName === singer);
+    }
+
+    if (search) {
+      songs = performSearch(songs, search);
+    }
+
     res.json(songs);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
-// GET /api/songs/singers — unique singer names
 router.get('/singers', protect, async (req, res) => {
   try {
     const singers = await Song.distinct('singerName');
@@ -28,7 +60,6 @@ router.get('/singers', protect, async (req, res) => {
   }
 });
 
-// GET /api/songs/:id
 router.get('/:id', protect, async (req, res) => {
   try {
     const song = await Song.findById(req.params.id);
@@ -39,7 +70,6 @@ router.get('/:id', protect, async (req, res) => {
   }
 });
 
-// POST /api/songs — admin only
 router.post('/', protect, adminOnly, async (req, res) => {
   try {
     const song = await Song.create({ ...req.body, createdBy: req.user._id });
@@ -49,11 +79,11 @@ router.post('/', protect, adminOnly, async (req, res) => {
   }
 });
 
-// PUT /api/songs/:id — admin only
 router.put('/:id', protect, adminOnly, async (req, res) => {
   try {
     const song = await Song.findByIdAndUpdate(req.params.id, req.body, {
-      new: true, runValidators: true,
+      new: true,
+      runValidators: true,
     });
     if (!song) return res.status(404).json({ message: 'Song not found.' });
     res.json(song);
@@ -62,7 +92,6 @@ router.put('/:id', protect, adminOnly, async (req, res) => {
   }
 });
 
-// DELETE /api/songs/:id — admin only
 router.delete('/:id', protect, adminOnly, async (req, res) => {
   try {
     const song = await Song.findByIdAndDelete(req.params.id);
