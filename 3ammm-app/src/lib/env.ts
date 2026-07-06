@@ -13,7 +13,7 @@ const ENV: Environment = __DEV__ ? 'development' : 'production';
 
 const API_URLS = {
   development: process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000',
-  production: process.env.EXPO_PUBLIC_API_URL || 'https://YOUR-PROJECT.vercel.app',
+  production: process.env.EXPO_PUBLIC_API_URL || 'https://sabaserver.vercel.app',
 };
 
 export const API_URL = API_URLS[ENV];

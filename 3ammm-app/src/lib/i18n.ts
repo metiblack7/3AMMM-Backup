@@ -3,7 +3,7 @@ export type LangKey = "en" | "am";
 const translations = {
   en: {
     // App
-    appName: "Saba Wolaitegna SDA Lyrics Songs",
+    appName: "Saba App",
     appSub: "Wolaitegna lyrics SDA Songs",
 
     // Auth
@@ -101,7 +101,7 @@ const translations = {
     preview: "Preview",
     account: "Account",
     logout: "Sign out",
-    credit: "Developed by 3AMMM Media and Communication",
+    credit: "Developed by 3AMMM Media and Communication Dep't",
 
     // Misc
     songs2: "songs",
@@ -147,8 +147,8 @@ const translations = {
 
   am: {
     // App
-    appName: "ሳባ ወላይትኛ የሰ.ደ.አ መዝሙር ግጥሞች",
-    appSub: "የወላይትኛ ሰ.ደ.አ መዝሙሮች",
+    appName: "ሳባ የአድቬንቲስት ወላይትኛ መዝሙሮች ግጥሞች",
+    appSub: "የወላይትኛ አድቬንቲስት መዝሙሮች",
 
     // Auth
     signIn: "ይግቡ",
