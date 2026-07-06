@@ -114,7 +114,7 @@ function HomeTabComponent({ onOpenSong, onNavigateTab }: Props) {
           end={{ x: 0, y: 1 }}
           style={s.hero}>
           <Text style={s.greet}>{t.greeting}</Text>
-          <Text style={s.name}>{profile?.name?.split(" ")[0] ?? "User"}</Text>
+          <Text style={s.name}>{profile?.name?.split(" ")[0] ?? "Saba App"}</Text>
           <Text style={s.verse}>{t.verse}</Text>
         </LinearGradient>
 

@@ -50,6 +50,45 @@ function staggerDelay(index: number) {
   return Math.min(index * STAGGER_STEP, STAGGER_CAP);
 }
 
+// ── Cross-platform blur container ─────────────────────────────
+// BlurView works on iOS and web but renders transparent on Android.
+// On Android we simulate the frosted-glass look with a semi-opaque
+// View using the card's own background color.
+function GlassContainer({
+  children,
+  isDark,
+  style,
+  intensity = 80,
+}: {
+  children: React.ReactNode;
+  isDark: boolean;
+  style?: object;
+  intensity?: number;
+}) {
+  if (Platform.OS === "android") {
+    return (
+      <View
+        style={[
+          styles.blurContainer,
+          {
+            backgroundColor: isDark
+              ? "rgba(2, 18, 30, 0.92)"
+              : "rgba(255, 255, 255, 0.92)",
+          },
+          style,
+        ]}>
+        {children}
+      </View>
+    );
+  }
+
+  return (
+    <BlurView intensity={intensity} style={[styles.blurContainer, style]}>
+      {children}
+    </BlurView>
+  );
+}
+
 function FadeSlideIn({
   index,
   children,
@@ -215,7 +254,12 @@ function SetlistsTabComponent({ onOpenSong }: SongProps) {
 
   return (
     <Animated.ScrollView
-      style={{ flex: 1, backgroundColor: C.bg, paddingTop: TOP_PADDING, opacity: contentFade }}
+      style={{
+        flex: 1,
+        backgroundColor: C.bg,
+        paddingTop: TOP_PADDING,
+        opacity: contentFade,
+      }}
       showsVerticalScrollIndicator={false}
       decelerationRate="normal"
       overScrollMode="always"
@@ -239,9 +283,7 @@ function SetlistsTabComponent({ onOpenSong }: SongProps) {
 
           return (
             <FadeSlideIn key={sl._id} index={slIndex} style={styles.cardWrap}>
-              <BlurView
-                intensity={isDark ? 85 : 60}
-                style={styles.blurContainer}>
+              <GlassContainer isDark={isDark} intensity={isDark ? 85 : 60}>
                 <LinearGradient
                   colors={cardGradient}
                   start={{ x: 0, y: 0 }}
@@ -259,7 +301,9 @@ function SetlistsTabComponent({ onOpenSong }: SongProps) {
                   <View
                     style={[
                       styles.cardHdr,
-                      { borderBottomColor: isDark ? C.glassBorder : C.border },
+                      {
+                        borderBottomColor: isDark ? C.glassBorder : C.border,
+                      },
                     ]}>
                     <View
                       style={[
@@ -284,7 +328,9 @@ function SetlistsTabComponent({ onOpenSong }: SongProps) {
                     <View
                       style={[
                         styles.songCountBadge,
-                        { backgroundColor: isDark ? C.skyMid : C.skyPale },
+                        {
+                          backgroundColor: isDark ? C.skyMid : C.skyPale,
+                        },
                       ]}>
                       <Text style={[styles.songCountText, { color: C.sky }]}>
                         {songs.length}
@@ -336,7 +382,7 @@ function SetlistsTabComponent({ onOpenSong }: SongProps) {
                     </TouchableOpacity>
                   ))}
                 </LinearGradient>
-              </BlurView>
+              </GlassContainer>
             </FadeSlideIn>
           );
         })
@@ -508,96 +554,103 @@ function FavoritesTabComponent({
               const pageNumber = getPageNumber(song, index);
 
               return (
-                <FadeSlideIn key={song._id} index={index} style={styles.favCardWrap}>
+                <FadeSlideIn
+                  key={song._id}
+                  index={index}
+                  style={styles.favCardWrap}>
                   <TouchableOpacity
                     onPress={() => onOpenSong(song)}
                     activeOpacity={0.7}>
-                  <BlurView
-                    intensity={isDark ? 85 : 60}
-                    style={styles.blurContainer}>
-                    <LinearGradient
-                      colors={favGradient}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={[
-                        styles.favCard,
-                        {
-                          borderColor: isDark ? C.glassBorder : C.border,
-                          ...Platform.select({
-                            ios: { shadowColor: isDark ? C.sky : C.navy },
-                            android: {},
-                          }),
-                        },
-                      ]}>
-                      <View style={styles.favRow}>
-                        <View style={styles.favPageWrap}>
-                          <Text style={[styles.favPage, { color: C.sky }]}>
-                            {pageNumber}
-                          </Text>
-                        </View>
+                    <GlassContainer
+                      isDark={isDark}
+                      intensity={isDark ? 85 : 60}>
+                      <LinearGradient
+                        colors={favGradient}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={[
+                          styles.favCard,
+                          {
+                            borderColor: isDark ? C.glassBorder : C.border,
+                            ...Platform.select({
+                              ios: {
+                                shadowColor: isDark ? C.sky : C.navy,
+                              },
+                              android: {},
+                            }),
+                          },
+                        ]}>
+                        <View style={styles.favRow}>
+                          <View style={styles.favPageWrap}>
+                            <Text style={[styles.favPage, { color: C.sky }]}>
+                              {pageNumber}
+                            </Text>
+                          </View>
 
-                        <View style={styles.favMain}>
-                          <View style={styles.favTopRow}>
+                          <View style={styles.favMain}>
+                            <View style={styles.favTopRow}>
+                              <View
+                                style={[
+                                  styles.favIcon,
+                                  {
+                                    backgroundColor: isDark
+                                      ? C.skyGlowSoft
+                                      : C.skyPale,
+                                    borderColor: C.skyBorder,
+                                  },
+                                ]}>
+                                <Feather name="heart" size={20} color={C.sky} />
+                              </View>
+
+                              <View style={styles.favInfo}>
+                                <Text
+                                  style={[styles.favTitle, { color: C.text }]}
+                                  numberOfLines={1}>
+                                  {song.title}
+                                </Text>
+                                <Text
+                                  style={[styles.favMeta, { color: C.text2 }]}
+                                  numberOfLines={1}>
+                                  {song.singerName}
+                                </Text>
+                              </View>
+                            </View>
+
                             <View
                               style={[
-                                styles.favIcon,
+                                styles.favFooter,
                                 {
-                                  backgroundColor: isDark
-                                    ? C.skyGlowSoft
-                                    : C.skyPale,
-                                  borderColor: C.skyBorder,
+                                  borderTopColor: isDark
+                                    ? C.glassBorder
+                                    : C.border,
                                 },
                               ]}>
-                              <Feather name="heart" size={20} color={C.sky} />
-                            </View>
-
-                            <View style={styles.favInfo}>
-                              <Text
-                                style={[styles.favTitle, { color: C.text }]}
-                                numberOfLines={1}>
-                                {song.title}
-                              </Text>
-                              <Text
-                                style={[styles.favMeta, { color: C.text2 }]}
-                                numberOfLines={1}>
-                                {song.singerName}
-                              </Text>
-                            </View>
-                          </View>
-
-                          <View
-                            style={[
-                              styles.favFooter,
-                              {
-                                borderTopColor: isDark
-                                  ? C.glassBorder
-                                  : C.border,
-                              },
-                            ]}>
-                            <View style={{ flex: 1 }} />
-
-                            <View
-                              style={[
-                                styles.keyChip,
-                                { backgroundColor: C.goldDeep },
-                              ]}>
-                              <Text
-                                style={[styles.keyChipText, { color: C.gold }]}>
-                                {song.key}
-                              </Text>
+                              <View style={{ flex: 1 }} />
+                              <View
+                                style={[
+                                  styles.keyChip,
+                                  { backgroundColor: C.goldDeep },
+                                ]}>
+                                <Text
+                                  style={[
+                                    styles.keyChipText,
+                                    { color: C.gold },
+                                  ]}>
+                                  {song.key}
+                                </Text>
+                              </View>
                             </View>
                           </View>
+
+                          <Feather
+                            name="chevron-right"
+                            size={18}
+                            color={C.text3}
+                          />
                         </View>
-
-                        <Feather
-                          name="chevron-right"
-                          size={18}
-                          color={C.text3}
-                        />
-                      </View>
-                    </LinearGradient>
-                  </BlurView>
-                </TouchableOpacity>
+                      </LinearGradient>
+                    </GlassContainer>
+                  </TouchableOpacity>
                 </FadeSlideIn>
               );
             })}
@@ -701,9 +754,7 @@ function NotificationsTabComponent() {
                 key={n._id}
                 activeOpacity={0.7}
                 style={styles.notifCardWrap}>
-                <BlurView
-                  intensity={isDark ? 85 : 60}
-                  style={styles.blurContainer}>
+                <GlassContainer isDark={isDark} intensity={isDark ? 85 : 60}>
                   <LinearGradient
                     colors={[g1, g2]}
                     start={{ x: 0, y: 0 }}
@@ -713,7 +764,9 @@ function NotificationsTabComponent() {
                       {
                         borderColor: isDark ? C.glassBorder : C.border,
                         ...Platform.select({
-                          ios: { shadowColor: isDark ? C.sky : C.navy },
+                          ios: {
+                            shadowColor: isDark ? C.sky : C.navy,
+                          },
                           android: {},
                         }),
                       },
@@ -747,7 +800,7 @@ function NotificationsTabComponent() {
                       </Text>
                     </View>
                   </LinearGradient>
-                </BlurView>
+                </GlassContainer>
               </TouchableOpacity>
             );
           })}
@@ -759,7 +812,9 @@ function NotificationsTabComponent() {
 
 export const NotificationsTab = React.memo(NotificationsTabComponent);
 
-// All structural styles — no colors hardcoded
+// ─────────────────────────────────────────────────────────────────────────────
+// StyleSheets
+// ─────────────────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   blurContainer: {
     borderRadius: Radius.lg,

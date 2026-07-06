@@ -89,8 +89,8 @@ function SplashOverlay({
 }) {
   const { width } = useWindowDimensions();
 
-  const logoAspectRatio = 300 / 300;
-  const logoWidth = Math.min(width * 0.4, 185);
+  const logoAspectRatio = 200 / 200;
+  const logoWidth = Math.min(width * 0.3, 185);
   const logoHeight = logoWidth / logoAspectRatio;
 
   const containerOpacity = useRef(new Animated.Value(1)).current;
