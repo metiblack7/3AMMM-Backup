@@ -15,30 +15,13 @@ const app = express();
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const PORT = process.env.PORT || 5000;
 
-const getCorsOptions = () => {
-  if (NODE_ENV === 'production') {
-    const allowedOrigins = [
-      process.env.CORS_ORIGIN || '*',
-      'https://your-app.expo.app',
-    ].filter(Boolean);
-
-    return {
-      origin: (origin, callback) => {
-        if (!origin || allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
-          callback(null, true);
-        } else {
-          callback(new Error('CORS not allowed'));
-        }
-      },
-      credentials: true,
-      methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization'],
-      maxAge: 86400,
-    };
-  }
-
-  return { origin: '*' };
-};
+const getCorsOptions = () => ({
+  origin: true,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  maxAge: 86400,
+});
 
 app.use(cors(getCorsOptions()));
 app.use(express.json({ limit: '10mb' }));

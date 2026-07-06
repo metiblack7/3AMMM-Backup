@@ -5,7 +5,7 @@ const MONGO_SOURCE = process.env.MONGODB_URI ? 'MONGODB_URI' : process.env.MONGO
 
 const formatUriLog = (uri) => {
   if (!uri) return 'none';
-  return uri.replace(/mongodb:\/\/.+@/, 'mongodb://<auth>@');
+  return uri.replace(/mongodb(\+srv)?:\/\/.+@/, 'mongodb$1://<auth>@');
 };
 
 const buildMongoUri = (uri) => {
@@ -24,9 +24,11 @@ const buildMongoUri = (uri) => {
 const MONGO_URI = buildMongoUri(rawMongoUri);
 
 const MONGO_OPTIONS = {
-  serverSelectionTimeoutMS: 20000,
-  connectTimeoutMS: 20000,
-  socketTimeoutMS: 60000,
+  serverSelectionTimeoutMS: 10000,
+  connectTimeoutMS: 10000,
+  socketTimeoutMS: 45000,
+  maxPoolSize: 5,
+  minPoolSize: 0,
   bufferCommands: false,
 };
 
@@ -34,28 +36,42 @@ const cached = global.__mongooseCache || (global.__mongooseCache = { conn: null,
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+function isConnected() {
+  return mongoose.connection.readyState === 1;
+}
+
 async function connectServerless() {
-  if (cached.conn) {
+  if (isConnected()) {
+    return mongoose.connection;
+  }
+
+  if (cached.conn && isConnected()) {
     return cached.conn;
   }
 
   if (!cached.promise) {
     console.log(`🔧 MongoDB connection source: ${MONGO_SOURCE}`, formatUriLog(MONGO_URI));
-    cached.promise = mongoose.connect(MONGO_URI, MONGO_OPTIONS).then((conn) => {
-      console.log(`✅ MongoDB connected: ${conn.connection.host}`);
-      return conn;
-    });
+    cached.promise = mongoose.connect(MONGO_URI, MONGO_OPTIONS)
+      .then((conn) => {
+        console.log(`✅ MongoDB connected: ${conn.connection.host}`);
+        cached.conn = conn;
+        return conn;
+      })
+      .catch((err) => {
+        cached.promise = null;
+        cached.conn = null;
+        throw err;
+      });
   }
 
-  cached.conn = await cached.promise;
-  return cached.conn;
+  return cached.promise;
 }
 
 async function connectDB(options = {}) {
   const { serverless = false } = options;
 
   if (!MONGO_URI) {
-    throw new Error('No MongoDB connection string provided. Set MONGO_URL, MONGODB_URI, or MONGO_PUBLIC_URL.');
+    throw new Error('No MongoDB connection string provided. Set MONGODB_URI on Vercel.');
   }
 
   if (serverless) {
@@ -67,6 +83,10 @@ async function connectDB(options = {}) {
 
   for (let attempt = 1; attempt <= retries; attempt += 1) {
     try {
+      if (isConnected()) {
+        return mongoose.connection;
+      }
+
       console.log(`🔧 MongoDB connection source: ${MONGO_SOURCE}`, formatUriLog(MONGO_URI));
       const conn = await mongoose.connect(MONGO_URI, MONGO_OPTIONS);
       console.log(`✅ MongoDB connected: ${conn.connection.host}`);

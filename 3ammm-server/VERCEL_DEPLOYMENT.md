@@ -26,9 +26,11 @@ Deploy the 3AMMM API from the **`3ammm-server`** folder.
 
 1. Go to [vercel.com/new](https://vercel.com/new)
 2. Import your GitHub repository
-3. **Root Directory:** set to `3ammm-server`
+3. **Root Directory:** leave as **`.`** (repo root) — the root `vercel.json` and `api/index.js` route to `3ammm-server`
+   - Alternatively set Root Directory to `3ammm-server` if deploying only the server folder
 4. **Framework Preset:** Other
-5. Add environment variables:
+5. **Build Command:** leave empty (do NOT use `react-scripts build`)
+6. Add environment variables:
 
 | Variable | Value |
 |----------|-------|
@@ -111,6 +113,29 @@ npm run dev
 ---
 
 ## Troubleshooting
+
+### `react-scripts: command not found` during build
+Vercel is trying to build a React app. Fix:
+- Set **Build Command** to empty in Vercel → Settings → General
+- Ensure the repo has the root `vercel.json` and `package.json` (no `react-scripts` build)
+- Redeploy
+
+### Database connection failed (login shows this on phone)
+The API is live but MongoDB is not connected. Fix:
+1. Vercel → Project → **Settings → Environment Variables**
+2. Add `MONGODB_URI` with your Atlas connection string
+3. Add `JWT_SECRET` (long random string)
+4. Set `NODE_ENV=production`
+5. MongoDB Atlas → **Network Access** → allow `0.0.0.0/0`
+6. Redeploy after saving env vars
+
+Test:
+```bash
+curl https://sabaserver.vercel.app/health
+curl -X POST https://sabaserver.vercel.app/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@3ammm.com","password":"admin123"}'
+```
 
 ### 500 on first request (cold start)
 Normal on serverless — MongoDB connects on first invocation. Retry after a few seconds.

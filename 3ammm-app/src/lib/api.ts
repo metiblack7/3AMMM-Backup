@@ -66,7 +66,6 @@ export async function clearToken() {
 // ── Core fetch wrapper ────────────────────────────────────────
 export async function apiFetch(path: string, options: RequestInit = {}) {
   const token = await getToken();
-console.log("API TOKEN:", token ? "FOUND" : "MISSING");
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(options.headers as Record<string, string>),
@@ -87,7 +86,7 @@ console.log("API TOKEN:", token ? "FOUND" : "MISSING");
 
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    const timeoutId = setTimeout(() => controller.abort(), SYNC_CONFIG.TIMEOUT_MS);
 
     const res = await fetch(`${API_URL}${path}`, {
       ...options,
@@ -96,8 +95,23 @@ console.log("API TOKEN:", token ? "FOUND" : "MISSING");
     });
     clearTimeout(timeoutId);
 
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.message || `Request failed with status ${res.status}`);
+    const raw = await res.text();
+    let data: any = null;
+    if (raw) {
+      try {
+        data = JSON.parse(raw);
+      } catch {
+        throw new Error(
+          res.ok
+            ? 'Invalid server response.'
+            : `Server error (${res.status}). Check that the API is deployed correctly.`,
+        );
+      }
+    }
+
+    if (!res.ok) {
+      throw new Error(data?.message || `Request failed with status ${res.status}`);
+    }
 
     if (isRead) {
       setCachedData(cacheKey, data);
@@ -107,6 +121,9 @@ console.log("API TOKEN:", token ? "FOUND" : "MISSING");
 
     return data;
   } catch (err: any) {
+    if (err.name === 'AbortError') {
+      throw new Error('Request timed out. Check your internet connection.');
+    }
     logError(`API Error at ${path}:`, err.message);
     throw err;
   }

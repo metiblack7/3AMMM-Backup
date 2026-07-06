@@ -1,0 +1,9 @@
+{
+  "name": "3ammm",
+  "private": true,
+  "version": "1.0.0",
+  "description": "3AMMM monorepo — Vercel deploys the API from 3ammm-server",
+  "scripts": {
+    "build": "echo \"No frontend build — API only\""
+  }
+}

@@ -199,7 +199,15 @@ export default function LoginScreen({
     try {
       await signIn(email.trim(), password);
     } catch (err: any) {
-      setError(err.message || t.invalidCreds);
+      const message = err.message || t.invalidCreds;
+
+      if (message.includes('Database connection failed')) {
+        setError('Server cannot reach the database. Check Vercel env vars (MONGODB_URI) and redeploy.');
+      } else if (message.includes('Network request failed') || message.includes('timed out')) {
+        setError('Cannot reach the server. Check your internet connection.');
+      } else {
+        setError(message);
+      }
     } finally {
       setLoading(false);
     }
