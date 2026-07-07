@@ -113,6 +113,12 @@ function HomeTabComponent({ onOpenSong, onNavigateTab }: Props) {
     ? [C.surface, C.bg]
     : [C.bgDeep, C.bg];
 
+  const isGuestProfile =
+    !!profile && String(profile._id || "").startsWith("guest_");
+  const homeTitle = isGuestProfile
+    ? t.homeTitle
+    : profile?.name?.split(" ")[0] || t.homeTitle;
+
   const card1Gradient: [string, string] = isDark
     ? [C.navyLight, C.navy]
     : [C.surface, C.bgDeep];
@@ -145,9 +151,7 @@ function HomeTabComponent({ onOpenSong, onNavigateTab }: Props) {
           end={{ x: 0, y: 1 }}
           style={s.hero}>
           <Text style={s.greet}>{t.greeting}</Text>
-          <Text style={s.name}>
-            {profile?.name?.split(" ")[0] ?? "Saba App"}
-          </Text>
+          <Text style={s.name}>{homeTitle}</Text>
           <Text style={s.verse}>{t.verse}</Text>
         </LinearGradient>
 

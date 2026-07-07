@@ -2,30 +2,41 @@ import { db } from './db';
 import { api } from './api';
 import { publish } from './pubsub';
 import { Song } from '../screens/LyricsScreen';
-import { useNetworkStatus } from './network';
 
 async function getLocalIds(): Promise<string[]> {
-  return await db.favorites.getAll();
+  try {
+    const ids = await db.favorites.getAll();
+    return Array.isArray(ids) ? ids : [];
+  } catch {
+    return [];
+  }
 }
 
 async function getLocalSongs(allSongs?: Song[]): Promise<Song[]> {
   const ids = await getLocalIds();
+  if (!ids.length) return [];
   const out: Song[] = [];
   for (const id of ids) {
-    const found = (allSongs || []).find((s) => s._id === id) || (await db.songs.getById(id));
-    if (found) out.push(found);
-    else
-      out.push({ _id: id, title: 'Unknown Song', key: '', singerName: '', lyrics: [] } as Song);
+    const found =
+      (allSongs || []).find((s) => s._id === id) ||
+      (await db.songs.getById(id).catch(() => null));
+    if (found) {
+      out.push(found);
+    }
   }
   return out;
 }
 
-async function toggle(songId: string, profile?: any): Promise<{ favorited: boolean }>
-{
-  // If user is guest or not authenticated, toggle locally.
-  const isGuest = !!profile && String(profile._id || '').startsWith('guest_');
+async function toggle(
+  songId: string,
+  profile?: any,
+): Promise<{ favorited: boolean }> {
+  const isGuest =
+    !!profile && String(profile._id || '').startsWith('guest_');
+
+  // Guest or unauthenticated — local only
   if (!profile || isGuest) {
-    const ids = await db.favorites.getAll();
+    const ids = await getLocalIds();
     const idx = ids.indexOf(songId);
     let favorited = false;
     if (idx === -1) {
@@ -40,27 +51,23 @@ async function toggle(songId: string, profile?: any): Promise<{ favorited: boole
     return { favorited };
   }
 
-  // Authenticated: try server toggle first, fallback to local on error
+  // Authenticated — server first, local mirror after
   try {
     const res = await api.favorites.toggle(songId);
-    // ensure local cache mirrors server state
-    try {
-      const local = await db.favorites.getAll();
-      const idx = local.indexOf(songId);
-      if (res.favorited && idx === -1) {
-        local.push(songId);
-      } else if (!res.favorited && idx !== -1) {
-        local.splice(idx, 1);
-      }
-      await db.favorites.save(local);
-      publish('favorites:changed');
-    } catch (e) {
-      // ignore local save errors
+    // Mirror server state to local immediately
+    const local = await getLocalIds();
+    const idx = local.indexOf(songId);
+    if (res.favorited && idx === -1) {
+      local.push(songId);
+    } else if (!res.favorited && idx !== -1) {
+      local.splice(idx, 1);
     }
+    await db.favorites.save(local);
+    publish('favorites:changed');
     return { favorited: res.favorited };
-  } catch (e) {
-    // fallback to local toggle if server fails (network issues)
-    const ids = await db.favorites.getAll();
+  } catch {
+    // Network down — toggle locally so UI stays responsive
+    const ids = await getLocalIds();
     const idx = ids.indexOf(songId);
     let favorited = false;
     if (idx === -1) {
@@ -78,36 +85,48 @@ async function toggle(songId: string, profile?: any): Promise<{ favorited: boole
 
 async function mergeLocalOnSignIn(profile: any) {
   if (!profile) return;
-  const ids = await db.favorites.getAll();
-  if (!ids || !ids.length) return;
+  const ids = await getLocalIds();
+  if (!ids.length) return;
   try {
-    await api.favorites.merge(ids);
-    // refresh server favorites and persist locally
-    const server = await api.favorites.getAll();
-    if (Array.isArray(server)) {
-      const sids = server.map((s: any) => s._id);
-      await db.favorites.save(sids);
-      try { await db.songs.save(server as any); } catch (e) {}
-      publish('favorites:changed');
+    // POST local ids to server so they get merged
+    // uses the toggle endpoint one by one since merge may not exist
+    for (const id of ids) {
+      try {
+        await api.favorites.toggle(id);
+      } catch {
+        // ignore individual failures
+      }
     }
+    // Now refresh from server to get the definitive list
+    await refreshFromServer(profile);
   } catch (e) {
     console.warn('[favoritesService] merge failed', e);
   }
 }
 
-async function refreshFromServer(profile: any) {
-  if (!profile) return;
+async function refreshFromServer(profile: any): Promise<Song[] | null> {
+  if (!profile) return null;
+  const isGuest = String(profile._id || '').startsWith('guest_');
+  if (isGuest) return null;
+
   try {
+    // Get full song objects from server
     const server = await api.favorites.getAll();
     if (Array.isArray(server)) {
-      const sids = server.map((s: any) => s._id);
+      // Save IDs locally
+      const sids = server.map((s: any) => s._id).filter(Boolean);
       await db.favorites.save(sids);
-      try { await db.songs.save(server as any); } catch (e) {}
+      // Cache song data locally
+      try {
+        await db.songs.save(server as any);
+      } catch {
+        // ignore cache errors
+      }
       publish('favorites:changed');
       return server;
     }
-  } catch (e) {
-    // ignore network errors
+  } catch {
+    // Network down — silently use local cache
   }
   return null;
 }

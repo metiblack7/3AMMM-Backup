@@ -71,7 +71,7 @@ async function registerNativePushNotification(userName: string): Promise<void> {
   await AsyncStorage.setItem("3ammm_push_token", pushToken);
 
   try {
-    await api.post("/api/users/push-token", { token: pushToken });
+    await api.users.savePushToken(pushToken);
   } catch {}
 
   await Notifications.scheduleNotificationAsync({

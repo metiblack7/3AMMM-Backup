@@ -4,6 +4,7 @@ const translations = {
   en: {
     // App
     appName: "Saba App",
+    homeTitle: "Saba App",
     appSub: "Wolaitegna lyrics SDA Songs",
 
     // Auth
@@ -148,6 +149,7 @@ const translations = {
   am: {
     // App
     appName: "ሳባ የአድቬንቲስት ወላይትኛ መዝሙሮች ግጥሞች",
+    homeTitle: "ሳባ መዝሙሮች",
     appSub: "የወላይትኛ አድቬንቲስት መዝሙሮች",
 
     // Auth

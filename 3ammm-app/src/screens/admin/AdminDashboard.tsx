@@ -14,43 +14,34 @@ import { Feather } from "@expo/vector-icons";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/AppContext";
 import { useTheme } from "../../lib/useTheme";
-import { Loader } from "../../components/UI";
+import { Loader, EmptyState } from "../../components/UI";
 import AdminSongsTab from "./AdminSongsTab";
 import AdminSetlistsTab from "./AdminSetlistsTab";
 import { Spacing } from "../../theme";
 
 type AdminTab = "songs" | "setlists" | "members";
 
-// ─────────────────────────────────────────────────────
-// Module-level memory: survives this component
-// unmounting/remounting (e.g. navigating away and back)
-// within the same app session — not lost on tab switches.
-// ─────────────────────────────────────────────────────
 const dashboardMemory: { activeTab: AdminTab } = { activeTab: "songs" };
 
-// ─────────────────────────────────────────────────────
-// Stat card
-// ─────────────────────────────────────────────────────
 function StatCard({
-  num,
+  value,
   label,
   icon,
   C,
 }: {
-  num: number;
+  value: number;
   label: string;
   icon: string;
   C: any;
 }) {
   return (
-    <View
-      style={[sc.card, { backgroundColor: C.surface, borderColor: C.border }]}>
-      <View style={[sc.iconDot, { backgroundColor: C.skyPale }]}>
-        <Feather name={icon as any} size={15} color={C.sky} />
+    <View style={[styles.statCard, { backgroundColor: C.surface, borderColor: C.border }]}> 
+      <View style={[styles.statIcon, { backgroundColor: C.skyPale }]}> 
+        <Feather name={icon as any} size={16} color={C.sky} />
       </View>
       <View>
-        <Text style={[sc.num, { color: C.text }]}>{num}</Text>
-        <Text style={[sc.label, { color: C.text3 }]} numberOfLines={1}>
+        <Text style={[styles.statValue, { color: C.text }]}>{value}</Text>
+        <Text style={[styles.statLabel, { color: C.text3 }]} numberOfLines={1}>
           {label}
         </Text>
       </View>
@@ -58,36 +49,11 @@ function StatCard({
   );
 }
 
-const sc = StyleSheet.create({
-  card: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    borderRadius: 16,
-    borderWidth: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    minWidth: 128,
-  },
-  iconDot: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  num: { fontSize: 18, fontWeight: "800" },
-  label: { fontSize: 10.5, fontWeight: "600", marginTop: 1 },
-});
-
 export default function AdminDashboard() {
   const { profile, t, toggleLang, lang, signOut } = useApp();
   const { C, isDark } = useTheme();
 
-  // Restore last active tab instead of always defaulting to "songs"
-  const [activeTab, setActiveTab] = useState<AdminTab>(
-    dashboardMemory.activeTab,
-  );
+  const [activeTab, setActiveTab] = useState<AdminTab>(dashboardMemory.activeTab);
   const [stats, setStats] = useState({
     totalSongs: 0,
     totalWorshipers: 0,
@@ -100,16 +66,22 @@ export default function AdminDashboard() {
   const [memberQuery, setMemberQuery] = useState("");
   const hasLoadedMembers = useRef(false);
 
-  function selectTab(tab: AdminTab) {
-    dashboardMemory.activeTab = tab;
-    setActiveTab(tab);
-  }
+  useEffect(() => {
+    loadStats();
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === "members" && !hasLoadedMembers.current) {
+      hasLoadedMembers.current = true;
+      loadMembers();
+    }
+  }, [activeTab]);
 
   async function loadStats() {
     try {
       setStats(await api.users.getStats());
-    } catch (err) {
-      console.error("Stats error:", err);
+    } catch (error) {
+      console.error("Admin stats failed", error);
     }
   }
 
@@ -117,46 +89,36 @@ export default function AdminDashboard() {
     setLoadingMembers(true);
     try {
       setMembers(await api.users.getAll());
-    } catch (err) {
-      console.error("Members error:", err);
+    } catch (error) {
+      console.error("Member load failed", error);
     } finally {
       setLoadingMembers(false);
     }
   }
 
-  useEffect(() => {
-    loadStats();
-  }, []);
-
-  useEffect(() => {
-    // Only fetch members the first time that tab is opened, not every switch
-    if (activeTab === "members" && !hasLoadedMembers.current) {
-      hasLoadedMembers.current = true;
-      loadMembers();
-    }
-  }, [activeTab]);
-
   const onRefresh = async () => {
     setRefreshing(true);
     await loadStats();
-    if (activeTab === "members") await loadMembers();
+    if (activeTab === "members") {
+      await loadMembers();
+    }
     setRefreshing(false);
   };
 
-  const filteredMembers = members.filter((m) => {
-    const q = memberQuery.trim().toLowerCase();
-    if (!q) return true;
+  const filteredMembers = members.filter((member) => {
+    const query = memberQuery.trim().toLowerCase();
+    if (!query) return true;
     return (
-      m.name?.toLowerCase().includes(q) ||
-      m.email?.toLowerCase().includes(q) ||
-      m.singerName?.toLowerCase().includes(q)
+      member.name?.toLowerCase().includes(query) ||
+      member.email?.toLowerCase().includes(query) ||
+      member.singerName?.toLowerCase().includes(query)
     );
   });
 
   const langLabel = lang === "en" ? "አማ" : "EN";
-  const TOP = Platform.OS === "ios" ? 56 : (StatusBar.currentHeight ?? 24) + 8;
+  const topInset = Platform.OS === "ios" ? 56 : (StatusBar.currentHeight ?? 24) + 8;
 
-  const TABS: { key: AdminTab; label: string; icon: string }[] = [
+  const tabs: { key: AdminTab; label: string; icon: string }[] = [
     { key: "songs", label: t.songs, icon: "music" },
     { key: "setlists", label: t.setlists, icon: "calendar" },
     { key: "members", label: t.members ?? "Members", icon: "users" },
@@ -164,374 +126,287 @@ export default function AdminDashboard() {
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
-      <StatusBar
-        barStyle={isDark ? "light-content" : "dark-content"}
-        backgroundColor="transparent"
-        translucent
-      />
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor="transparent" translucent />
 
-      {/* ── HEADER ─────────────────────────────────────── */}
-      <View style={[s.headerTop, { paddingTop: TOP, backgroundColor: C.bg }]}>
-        <View style={{ flex: 1 }}>
-          <Text style={[s.headerTitle, { color: C.text }]}>{t.appName}</Text>
-          <Text style={[s.headerSub, { color: C.text2 }]}>
-            {t.adminDash ?? "Admin Dashboard"}
-          </Text>
-        </View>
-        <View style={s.headerRight}>
-          <TouchableOpacity
-            onPress={toggleLang}
-            style={[
-              s.langPill,
-              { borderColor: C.sky, backgroundColor: C.skyPale },
-            ]}
-            activeOpacity={0.75}>
-            <Text style={[s.langPillText, { color: C.sky }]}>{langLabel}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={signOut}
-            style={[s.avatar, { backgroundColor: C.sky }]}
-            activeOpacity={0.8}>
-            <Text style={[s.avatarText, { color: C.bg }]}>
-              {(profile?.name ?? "A")
-                .split(" ")
-                .map((w: string) => w[0])
-                .join("")
-                .slice(0, 2)
-                .toUpperCase()}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* ── STATS ──────────────────────────────────────── */}
       <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={{ flexGrow: 0 }}
-        contentContainerStyle={{
-          paddingHorizontal: Spacing.lg,
-          paddingVertical: 12,
-          gap: 10,
-        }}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={C.sky}
-          />
-        }>
-        <StatCard
-          num={stats.totalSongs}
-          label={t.totalSongs ?? "Songs"}
-          icon="music"
-          C={C}
-        />
-        <StatCard
-          num={stats.totalWorshipers}
-          label={t.totalWorshipers ?? "Worshipers"}
-          icon="users"
-          C={C}
-        />
-        <StatCard
-          num={stats.totalSingers}
-          label={t.totalSingers ?? "Singers"}
-          icon="mic"
-          C={C}
-        />
-        <StatCard
-          num={stats.totalSetlists}
-          label={t.totalSetlists ?? "Setlists"}
-          icon="calendar"
-          C={C}
-        />
-      </ScrollView>
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingBottom: 22 }}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.sky} />}
+      >
+        <View style={[styles.header, { paddingTop: topInset, backgroundColor: C.bg }]}> 
+          <View style={styles.headerText}>
+            <Text style={[styles.title, { color: C.text }]}>{t.appName}</Text>
+            <Text style={[styles.subtitle, { color: C.text2 }]}>{t.adminDash ?? "Admin Dashboard"}</Text>
+          </View>
 
-      {/* ── SEGMENTED TAB BAR ──────────────────────────── */}
-      <View
-        style={[
-          s.segmentWrap,
-          { backgroundColor: C.surface, borderColor: C.border },
-        ]}>
-        {TABS.map((tab) => {
-          const active = activeTab === tab.key;
-          return (
-            <TouchableOpacity
-              key={tab.key}
-              style={[
-                s.segmentItem,
-                active && {
-                  backgroundColor: C.sky,
-                  shadowColor: C.sky,
-                  shadowOpacity: 0.3,
-                  shadowRadius: 6,
-                  shadowOffset: { width: 0, height: 2 },
-                  elevation: 3,
-                },
-              ]}
-              onPress={() => selectTab(tab.key)}
-              activeOpacity={0.8}>
-              <Feather
-                name={tab.icon as any}
-                size={14}
-                color={active ? C.bg : C.text3}
-              />
-              <Text
-                style={[
-                  s.segmentLabel,
-                  { color: active ? C.bg : C.text3 },
-                  active && { fontWeight: "700" },
-                ]}
-                numberOfLines={1}>
-                {tab.label}
+          <View style={styles.headerControls}>
+            <TouchableOpacity onPress={toggleLang} style={[styles.langChip, { borderColor: C.sky }]} activeOpacity={0.85}>
+              <Text style={[styles.langChipText, { color: C.sky }]}>{langLabel}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={onRefresh} style={[styles.iconChip, { borderColor: C.border }]} activeOpacity={0.85}>
+              <Feather name="refresh-cw" size={18} color={C.sky} />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={signOut} style={[styles.avatar, { backgroundColor: C.sky }]} activeOpacity={0.85}>
+              <Text style={[styles.avatarText, { color: C.bg }]}>
+                {(profile?.name ?? "A").split(" ").map((part: string) => part[0]).join("").slice(0, 2).toUpperCase()}
               </Text>
             </TouchableOpacity>
-          );
-        })}
-      </View>
-
-      {/* ── CONTENT ────────────────────────────────────
-          IMPORTANT: all three tabs stay mounted at all
-          times. We just hide the inactive ones with
-          display:"none". This is what preserves scroll
-          position, filters, and any in-progress edits
-          when switching tabs — nothing gets torn down. */}
-      <View style={{ flex: 1 }}>
-        <View style={[{ flex: 1 }, activeTab !== "songs" && s.hiddenTab]}>
-          <AdminSongsTab />
+          </View>
         </View>
 
-        <View style={[{ flex: 1 }, activeTab !== "setlists" && s.hiddenTab]}>
-          <AdminSetlistsTab />
+        <View style={[styles.statsContainer, { backgroundColor: C.surface, borderColor: C.border }]}> 
+          <StatCard value={stats.totalSongs} label={t.totalSongs ?? "Songs"} icon="music" C={C} />
+          <StatCard value={stats.totalWorshipers} label={t.totalWorshipers ?? "Worshipers"} icon="users" C={C} />
+          <StatCard value={stats.totalSingers} label={t.totalSingers ?? "Singers"} icon="mic" C={C} />
+          <StatCard value={stats.totalSetlists} label={t.totalSetlists ?? "Setlists"} icon="calendar" C={C} />
         </View>
 
-        <View style={[{ flex: 1 }, activeTab !== "members" && s.hiddenTab]}>
-          {loadingMembers ? (
-            <Loader />
-          ) : (
-            <ScrollView showsVerticalScrollIndicator={false}>
-              <View style={{ paddingVertical: Spacing.lg }}>
-                <View style={[s.membersHdr, { borderBottomColor: C.border }]}>
-                  <Feather name="users" size={16} color={C.sky} />
-                  <Text style={[s.membersHdrText, { color: C.text }]}>
-                    {t.allMembers ?? "All Members"}
-                  </Text>
-                  <View style={[s.countBadge, { backgroundColor: C.skyPale }]}>
-                    <Text style={[s.countBadgeText, { color: C.sky }]}>
-                      {filteredMembers.length}
-                    </Text>
-                  </View>
-                </View>
+        <View style={[styles.segmentControl, { backgroundColor: C.surface, borderColor: C.border }]}> 
+          {tabs.map((tab) => {
+            const active = activeTab === tab.key;
+            return (
+              <TouchableOpacity
+                key={tab.key}
+                onPress={() => {
+                  dashboardMemory.activeTab = tab.key;
+                  setActiveTab(tab.key);
+                }}
+                activeOpacity={0.85}
+                style={[styles.tabButton, active && { backgroundColor: C.sky, shadowColor: C.sky, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.22, shadowRadius: 7, elevation: 3 }]}
+              >
+                <Feather name={tab.icon as any} size={14} color={active ? C.bg : C.text3} />
+                <Text style={[styles.tabText, active ? { color: C.bg, fontWeight: "700" } : { color: C.text3 }]}>{tab.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
 
-                {/* Search */}
-                <View
-                  style={{ paddingHorizontal: Spacing.lg, marginBottom: 12 }}>
-                  <View
-                    style={[
-                      s.searchWrap,
-                      { backgroundColor: C.bg, borderColor: C.border },
-                    ]}>
-                    <Feather name="search" size={15} color={C.text3} />
-                    <TextInput
-                      style={[s.searchInput, { color: C.text }]}
-                      placeholder="Search members..."
-                      placeholderTextColor={C.text3}
-                      value={memberQuery}
-                      onChangeText={setMemberQuery}
-                    />
-                    {memberQuery.length > 0 && (
-                      <TouchableOpacity onPress={() => setMemberQuery("")}>
-                        <Feather name="x" size={15} color={C.text3} />
-                      </TouchableOpacity>
-                    )}
-                  </View>
+        <View style={styles.tabPanel}> 
+          <View style={activeTab !== "songs" ? styles.hidden : undefined}><AdminSongsTab /></View>
+          <View style={activeTab !== "setlists" ? styles.hidden : undefined}><AdminSetlistsTab /></View>
+          <View style={activeTab !== "members" ? styles.hidden : undefined}> 
+            <View style={styles.membersSection}>
+              <View style={[styles.membersHeader, { backgroundColor: C.surface, borderColor: C.border }]}> 
+                <View>
+                  <Text style={[styles.membersTitle, { color: C.text }]}>{t.members ?? "Members"}</Text>
+                  <Text style={[styles.membersSubtitle, { color: C.text2 }]}>{t.manageMembers ?? "Review and manage accounts."}</Text>
                 </View>
+                <View style={[styles.membersBadge, { backgroundColor: C.skyPale }]}> 
+                  <Text style={[styles.membersBadgeText, { color: C.sky }]}>{filteredMembers.length}</Text>
+                </View>
+              </View>
 
-                {filteredMembers.length === 0 ? (
-                  <View style={s.emptyWrap}>
-                    <Feather name="users" size={28} color={C.text3} />
-                    <Text style={[s.emptyText, { color: C.text3 }]}>
-                      No members found
-                    </Text>
-                  </View>
-                ) : (
-                  filteredMembers.map((m: any) => {
-                    const isAdmin = m.role === "admin";
+              <View style={[styles.searchRow, { backgroundColor: C.bg, borderColor: C.border }]}> 
+                <Feather name="search" size={16} color={C.text3} />
+                <TextInput
+                  style={[styles.searchInput, { color: C.text }]}
+                  placeholder={t.searchMembers ?? "Search members..."}
+                  placeholderTextColor={C.text3}
+                  value={memberQuery}
+                  onChangeText={setMemberQuery}
+                />
+                {memberQuery.length > 0 && (
+                  <TouchableOpacity onPress={() => setMemberQuery("")}>
+                    <Feather name="x" size={16} color={C.text3} />
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {loadingMembers ? (
+                <Loader />
+              ) : filteredMembers.length === 0 ? (
+                <View style={styles.emptyState}> 
+                  <Feather name="users" size={28} color={C.text3} />
+                  <Text style={[styles.emptyText, { color: C.text3 }]}>{memberQuery ? "No members match." : "No members yet."}</Text>
+                </View>
+              ) : (
+                <View style={styles.memberList}> 
+                  {filteredMembers.map((member) => {
+                    const isAdmin = member.role === "admin";
                     return (
-                      <View
-                        key={m._id}
-                        style={[s.memberRow, { borderBottomColor: C.border }]}>
-                        <View
-                          style={[
-                            s.memberAv,
-                            {
-                              backgroundColor: isAdmin ? C.sky : C.surface,
-                              borderColor: C.border,
-                            },
-                          ]}>
-                          <Text
-                            style={[
-                              s.memberAvText,
-                              { color: isAdmin ? C.bg : C.text2 },
-                            ]}>
-                            {m.name
-                              .split(" ")
-                              .map((w: string) => w[0])
-                              .join("")
-                              .slice(0, 2)
-                              .toUpperCase()}
-                          </Text>
+                      <View key={member._id} style={[styles.memberItem, { backgroundColor: C.surface, borderColor: C.border }]}> 
+                        <View style={[styles.memberAvatar, { backgroundColor: isAdmin ? C.sky : C.bg, borderColor: C.border }]}> 
+                          <Text style={[styles.memberAvatarText, { color: isAdmin ? C.bg : C.text2 }]}>{member.name.split(" ").map((piece: string) => piece[0]).join("").slice(0, 2).toUpperCase()}</Text>
                         </View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={[s.memberName, { color: C.text }]}>
-                            {m.name}
-                          </Text>
-                          <Text style={[s.memberSub, { color: C.text2 }]}>
-                            {m.singerName || m.email}
-                          </Text>
+                        <View style={styles.memberDetails}> 
+                          <Text style={[styles.memberName, { color: C.text }]}>{member.name}</Text>
+                          <Text style={[styles.memberEmail, { color: C.text2 }]} numberOfLines={1}>{member.email}</Text>
                         </View>
-                        <View
-                          style={[
-                            s.roleTag,
-                            {
-                              backgroundColor: isAdmin
-                                ? C.skyPale
-                                : "transparent",
-                              borderColor: C.border,
-                            },
-                          ]}>
-                          <Text
-                            style={[
-                              s.roleTagText,
-                              { color: isAdmin ? C.sky : C.text3 },
-                            ]}>
-                            {isAdmin ? "ADMIN" : "USER"}
-                          </Text>
+                        <View style={[styles.roleTag, { backgroundColor: isAdmin ? C.skyPale : C.surface, borderColor: C.border }]}> 
+                          <Text style={[styles.roleText, { color: isAdmin ? C.sky : C.text3 }]}>{isAdmin ? "ADMIN" : "USER"}</Text>
                         </View>
                       </View>
                     );
-                  })
-                )}
-              </View>
-            </ScrollView>
-          )}
+                  })}
+                </View>
+              )}
+            </View>
+          </View>
         </View>
-      </View>
+      </ScrollView>
     </View>
   );
 }
 
-const s = StyleSheet.create({
-  headerTop: {
+const styles = StyleSheet.create({
+  header: {
     paddingHorizontal: Spacing.lg,
-    paddingBottom: 10,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 12,
+  },
+  headerText: { flex: 1 },
+  title: { fontSize: 24, fontWeight: "800" },
+  subtitle: { fontSize: 12, marginTop: 4, lineHeight: 18 },
+  headerControls: {
     flexDirection: "row",
     alignItems: "center",
-    gap: Spacing.lg,
+    gap: 10,
   },
-  headerTitle: { fontSize: 18, fontWeight: "700", letterSpacing: 0.2 },
-  headerSub: { fontSize: 11, marginTop: 1 },
-  headerRight: { flexDirection: "row", alignItems: "center", gap: 10 },
-  langPill: {
+  langChip: {
     borderWidth: 1,
     borderRadius: 999,
-    paddingHorizontal: 11,
-    paddingVertical: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
   },
-  langPillText: { fontSize: 10, fontWeight: "700" },
-  avatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+  langChipText: { fontSize: 11, fontWeight: "700" },
+  iconChip: {
+    width: 38,
+    height: 38,
+    borderRadius: 14,
+    borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
   },
-  avatarText: { fontSize: 11, fontWeight: "700" },
-
-  segmentWrap: {
+  avatar: {
+    width: 38,
+    height: 38,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarText: { fontSize: 12, fontWeight: "800" },
+  statsContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    marginHorizontal: Spacing.lg,
+    marginTop: 18,
+    padding: 14,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  statCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderRadius: 16,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    minWidth: 132,
+  },
+  statIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  statValue: { fontSize: 18, fontWeight: "800" },
+  statLabel: { fontSize: 11, fontWeight: "600", marginTop: 2 },
+  segmentControl: {
     flexDirection: "row",
     marginHorizontal: Spacing.lg,
-    marginBottom: 10,
-    padding: 4,
-    borderRadius: 14,
+    marginTop: 18,
+    padding: 6,
+    borderRadius: 16,
     borderWidth: 1,
-    gap: 4,
+    gap: 8,
   },
-  segmentItem: {
+  tabButton: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
-    paddingVertical: 9,
-    borderRadius: 10,
-  },
-  segmentLabel: { fontSize: 12, fontWeight: "500" },
-
-  // Keeps the tab mounted (preserving its internal state)
-  // but visually and interactively removed from the screen.
-  hiddenTab: {
-    display: "none",
-  },
-
-  searchWrap: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
     borderRadius: 12,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    height: 42,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
   },
-  searchInput: {
-    flex: 1,
-    fontSize: 13,
-  },
-
-  emptyWrap: {
+  tabText: { fontSize: 12, fontWeight: "600" },
+  tabPanel: { flex: 1, minHeight: 520 },
+  hidden: { display: "none" },
+  membersSection: { marginTop: 18 },
+  membersHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 40,
-    gap: 8,
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 16,
+    marginHorizontal: Spacing.lg,
   },
-  emptyText: { fontSize: 13, fontWeight: "500" },
-
-  membersHdr: {
+  membersTitle: { fontSize: 16, fontWeight: "700" },
+  membersSubtitle: { fontSize: 12, marginTop: 4 },
+  membersBadge: {
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  membersBadgeText: { fontSize: 12, fontWeight: "700" },
+  searchRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing.lg,
-    borderBottomWidth: 1,
-    marginBottom: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginHorizontal: Spacing.lg,
+    marginTop: 14,
   },
-  membersHdrText: { fontSize: 14, fontWeight: "700", flex: 1 },
-  countBadge: { borderRadius: 10, paddingHorizontal: 9, paddingVertical: 3 },
-  countBadgeText: { fontSize: 11, fontWeight: "700" },
-  memberRow: {
+  searchInput: { flex: 1, fontSize: 14 },
+  emptyState: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 40,
+    gap: 10,
+    marginHorizontal: Spacing.lg,
+  },
+  emptyText: { fontSize: 13, fontWeight: "600" },
+  memberList: {
+    marginTop: 14,
+    marginHorizontal: Spacing.lg,
+    gap: 10,
+  },
+  memberItem: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 14,
   },
-  memberAv: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+  memberAvatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
   },
-  memberAvText: { fontSize: 12, fontWeight: "700" },
-  memberName: { fontSize: 13, fontWeight: "600" },
-  memberSub: { fontSize: 11, marginTop: 1 },
+  memberAvatarText: { fontSize: 12, fontWeight: "800" },
+  memberDetails: { flex: 1, minWidth: 0 },
+  memberName: { fontSize: 14, fontWeight: "700" },
+  memberEmail: { fontSize: 12, marginTop: 2 },
   roleTag: {
     borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
   },
-  roleTagText: { fontSize: 10, fontWeight: "700" },
+  roleText: { fontSize: 11, fontWeight: "700" },
 });

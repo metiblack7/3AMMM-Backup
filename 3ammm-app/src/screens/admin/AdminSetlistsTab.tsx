@@ -18,7 +18,7 @@ import { useTheme } from "../../lib/useTheme";
 import { Field, Loader, EmptyState } from "../../components/UI";
 import { Spacing, Radius } from "../../theme";
 
-interface Song {
+type Song = {
   _id: string;
   title: string;
   key: string;
@@ -26,13 +26,14 @@ interface Song {
   category: string;
   tempo: string;
   lyrics: any[];
-}
-interface Setlist {
+};
+
+type Setlist = {
   _id: string;
   title: string;
   date: string;
   songIds: Song[];
-}
+};
 
 export default function AdminSetlistsTab() {
   const { t } = useApp();
@@ -41,90 +42,95 @@ export default function AdminSetlistsTab() {
   const [songs, setSongs] = useState<Song[]>([]);
   const [setlists, setSetlists] = useState<Setlist[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editSetlist, setEditSetlist] = useState<Setlist | null>(null);
   const [formTitle, setFormTitle] = useState("");
   const [formDate, setFormDate] = useState("");
   const [pickedIds, setPickedIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
 
-  async function load() {
+  const load = async () => {
     try {
-      const [songsData, setlistsData] = await Promise.all([
-        api.songs.getAll(),
-        api.setlists.getAll(),
-      ]);
+      const [songsData, setlistsData] = await Promise.all([api.songs.getAll(), api.setlists.getAll()]);
       setSongs(songsData);
       setSetlists(setlistsData);
-    } catch (err) {
-      console.error(err);
+    } catch (error) {
+      console.error("Setlists load failed", error);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  }
+  };
 
   useEffect(() => {
     load();
   }, []);
+
   const onRefresh = async () => {
     setRefreshing(true);
     await load();
-    setRefreshing(false);
   };
 
-  function openNew() {
+  function openNewSetlist() {
     setEditSetlist(null);
     setFormTitle("");
     setFormDate("");
     setPickedIds([]);
     setModalOpen(true);
   }
-  function openEdit(sl: Setlist) {
-    setEditSetlist(sl);
-    setFormTitle(sl.title);
-    setFormDate(sl.date);
-    setPickedIds(sl.songIds.map((s) => s._id));
+
+  function openEditSetlist(setlist: Setlist) {
+    setEditSetlist(setlist);
+    setFormTitle(setlist.title);
+    setFormDate(setlist.date);
+    setPickedIds(setlist.songIds.map((song) => song._id));
     setModalOpen(true);
   }
-  function togglePick(id: string) {
-    setPickedIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
-    );
+
+  function toggleSongSelection(id: string) {
+    setPickedIds((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
   }
 
   async function handleSave() {
-    if (!formTitle || !formDate) {
-      Alert.alert("Missing info", "Please fill in both theme and date.");
+    if (!formTitle.trim() || !formDate.trim()) {
+      Alert.alert("Missing details", "Please provide both a theme and date.");
       return;
     }
     setSaving(true);
     try {
-      const payload = { title: formTitle, date: formDate, songIds: pickedIds };
-      if (editSetlist) await api.setlists.update(editSetlist._id, payload);
-      else await api.setlists.create(payload);
+      const payload = { title: formTitle.trim(), date: formDate.trim(), songIds: pickedIds };
+      if (editSetlist && editSetlist._id) {
+        await api.setlists.update(editSetlist._id, payload);
+      } else {
+        await api.setlists.create(payload);
+      }
       setModalOpen(false);
       load();
-    } catch (err: any) {
-      Alert.alert("Error", err.message);
+    } catch (error: any) {
+      Alert.alert("Save error", error?.message || "Could not save the setlist.");
     } finally {
       setSaving(false);
     }
   }
 
-  async function handleDelete(sl: Setlist) {
-    Alert.alert("Delete setlist", `Delete "${sl.title}"?`, [
+  const handleDelete = (setlist: Setlist) => {
+    Alert.alert("Delete setlist", `Delete "${setlist.title}"?`, [
       { text: t.cancel, style: "cancel" },
       {
         text: t.delete,
         style: "destructive",
         onPress: async () => {
-          await api.setlists.delete(sl._id);
-          load();
+          try {
+            await api.setlists.delete(setlist._id);
+            load();
+          } catch (error: any) {
+            Alert.alert("Delete failed", error?.message || "Could not delete the setlist.");
+          }
         },
       },
     ]);
-  }
+  };
 
   if (loading) return <Loader />;
 
@@ -132,198 +138,98 @@ export default function AdminSetlistsTab() {
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       <ScrollView
         showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={C.sky}
-          />
-        }>
-        {/* Add button — same flat style as user-side primary actions */}
-        <View style={{ padding: Spacing.lg, paddingBottom: 8 }}>
-          <TouchableOpacity
-            style={[s.addBtn, { backgroundColor: C.sky }]}
-            onPress={openNew}
-            activeOpacity={0.85}>
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.sky} />}
+        contentContainerStyle={{ paddingBottom: 28 }}
+      >
+        <View style={styles.actionArea}>
+          <TouchableOpacity style={[styles.newButton, { backgroundColor: C.sky }]} onPress={openNewSetlist} activeOpacity={0.85}>
             <Feather name="plus" size={18} color={C.bg} />
-            <Text style={[s.addBtnText, { color: C.bg }]}>{t.newSetlist}</Text>
+            <Text style={[styles.newButtonText, { color: C.bg }]}>{t.newSetlist}</Text>
           </TouchableOpacity>
         </View>
 
         {setlists.length === 0 ? (
-          <EmptyState
-            icon={<Feather name="calendar" size={22} color={C.sky} />}
-            text="No setlists yet."
-          />
+          <EmptyState icon={<Feather name="calendar" size={22} color={C.sky} />} text={t.noSetlists ?? "No setlists have been created yet."} />
         ) : (
-          setlists.map((sl) => {
-            const slSongs = sl.songIds || [];
-            return (
-              <View
-                key={sl._id}
-                style={[
-                  s.card,
-                  { backgroundColor: C.surface, borderColor: C.border },
-                ]}>
-                {/* Card header */}
-                <View style={[s.cardHdr, { borderBottomColor: C.border }]}>
-                  <View style={[s.dateBadge, { backgroundColor: C.skyPale }]}>
-                    <Text style={[s.dateText, { color: C.sky }]}>
-                      {sl.date}
-                    </Text>
+          <View style={styles.listWrapper}>
+            {setlists.map((setlist) => (
+              <View key={setlist._id} style={[styles.setlistCard, { backgroundColor: C.surface, borderColor: C.border }]}> 
+                <View style={[styles.setlistHeader, { borderBottomColor: C.border }]}> 
+                  <View style={[styles.setlistDate, { backgroundColor: C.skyPale }]}> 
+                    <Text style={[styles.setlistDateText, { color: C.sky }]}>{setlist.date}</Text>
                   </View>
-                  <Text
-                    style={[s.cardTheme, { color: C.text }]}
-                    numberOfLines={1}>
-                    {sl.title}
-                  </Text>
-                  <Text style={[s.cardCnt, { color: C.text2 }]}>
-                    {slSongs.length} {t.songs2}
-                  </Text>
+                  <Text style={[styles.setlistTitle, { color: C.text }]} numberOfLines={1}>{setlist.title}</Text>
+                  <Text style={[styles.setlistCount, { color: C.text2 }]}>{setlist.songIds.length} {t.songs2}</Text>
                 </View>
 
-                {/* Songs */}
-                {slSongs.map((song: any, i: number) => (
-                  <View
-                    key={song._id || i}
-                    style={[
-                      s.songRow,
-                      i < slSongs.length - 1 && [
-                        s.songBorder,
-                        { borderBottomColor: C.border },
-                      ],
-                    ]}>
-                    <Text style={[s.songNum, { color: C.sky }]}>{i + 1}</Text>
-                    <Text
-                      style={[s.songName, { color: C.text, flex: 1 }]}
-                      numberOfLines={1}>
-                      {song.title}
-                    </Text>
-                    <Text style={[s.songSinger, { color: C.text2 }]}>
-                      {song.singerName}
-                    </Text>
+                {setlist.songIds.map((song, index) => (
+                  <View key={song._id || index} style={[styles.songRow, index < setlist.songIds.length - 1 && { borderBottomColor: C.border, borderBottomWidth: 1 }]}> 
+                    <Text style={[styles.songIndex, { color: C.sky }]}>{index + 1}</Text>
+                    <Text style={[styles.songTitle, { color: C.text }]} numberOfLines={1}>{song.title}</Text>
+                    <Text style={[styles.songSinger, { color: C.text2 }]} numberOfLines={1}>{song.singerName}</Text>
                   </View>
                 ))}
 
-                {/* Actions — simple row, no danger borders */}
-                <View style={[s.cardActions, { borderTopColor: C.border }]}>
-                  <TouchableOpacity
-                    style={s.actionBtn}
-                    onPress={() => openEdit(sl)}
-                    activeOpacity={0.7}>
+                <View style={[styles.footerRow, { borderTopColor: C.border }]}> 
+                  <TouchableOpacity style={styles.footerButton} onPress={() => openEditSetlist(setlist)} activeOpacity={0.75}>
                     <Feather name="edit-2" size={13} color={C.sky} />
-                    <Text style={[s.actionBtnText, { color: C.sky }]}>
-                      {t.editSetlist}
-                    </Text>
+                    <Text style={[styles.footerText, { color: C.sky }]}>{t.editSetlist}</Text>
                   </TouchableOpacity>
-                  <View
-                    style={[s.actionDivider, { backgroundColor: C.border }]}
-                  />
-                  <TouchableOpacity
-                    style={s.actionBtn}
-                    onPress={() => handleDelete(sl)}
-                    activeOpacity={0.7}>
+                  <TouchableOpacity style={styles.footerButton} onPress={() => handleDelete(setlist)} activeOpacity={0.75}>
                     <Feather name="trash-2" size={13} color={C.danger} />
-                    <Text style={[s.actionBtnText, { color: C.danger }]}>
-                      {t.deleteSetlist}
-                    </Text>
+                    <Text style={[styles.footerText, { color: C.danger }]}>{t.deleteSetlist}</Text>
                   </TouchableOpacity>
                 </View>
               </View>
-            );
-          })
+            ))}
+          </View>
         )}
-        <View style={{ height: 20 }} />
       </ScrollView>
 
-      {/* ── MODAL — clean, simple, matches user lyrics screen feel ── */}
-      <Modal
-        visible={modalOpen}
-        animationType="slide"
-        presentationStyle="pageSheet">
-        <KeyboardAvoidingView
-          style={{ flex: 1, backgroundColor: C.bg }}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}>
-          <View
-            style={[
-              s.modalHdr,
-              { borderBottomColor: C.border, backgroundColor: C.surface },
-            ]}>
+      <Modal visible={modalOpen} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setModalOpen(false)}>
+        <KeyboardAvoidingView style={{ flex: 1, backgroundColor: C.bg }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+          <View style={[styles.modalHeader, { borderBottomColor: C.border, backgroundColor: C.surface }]}> 
             <TouchableOpacity onPress={() => setModalOpen(false)}>
-              <Text style={[s.modalCancel, { color: C.text2 }]}>
-                {t.cancel}
-              </Text>
+              <Text style={[styles.modalCancel, { color: C.text2 }]}>{t.cancel}</Text>
             </TouchableOpacity>
-            <Text style={[s.modalTitle, { color: C.text }]}>
-              {editSetlist ? t.editSetlist : t.newSetlist}
-            </Text>
+            <Text style={[styles.modalTitle, { color: C.text }]}>{editSetlist ? t.editSetlist : t.newSetlist}</Text>
             <TouchableOpacity onPress={handleSave} disabled={saving}>
-              <Text
-                style={[
-                  s.modalSave,
-                  { color: C.sky },
-                  saving && { opacity: 0.5 },
-                ]}>
-                {saving ? "Saving..." : t.save}
-              </Text>
+              <Text style={[styles.modalSave, { color: C.sky, opacity: saving ? 0.5 : 1 }]}>{saving ? "Saving..." : t.save}</Text>
             </TouchableOpacity>
           </View>
 
-          <ScrollView
-            style={{ flex: 1, backgroundColor: C.bg }}
-            contentContainerStyle={{ padding: Spacing.lg }}>
+          <ScrollView style={{ flex: 1, backgroundColor: C.bg }} contentContainerStyle={{ padding: Spacing.lg }} keyboardShouldPersistTaps="handled">
             <Field
               label={t.setlistTheme}
               value={formTitle}
               onChangeText={setFormTitle}
-              placeholder="Morning of Praise"
+              placeholder={t.setlistThemePlaceholder ?? "Theme or occasion"}
             />
             <Field
               label={t.setlistDate}
               value={formDate}
               onChangeText={setFormDate}
-              placeholder="Sat, May 24"
+              placeholder={t.setlistDatePlaceholder ?? "Date e.g. Sat, May 24"}
             />
-
-            <Text style={[s.pickLabel, { color: C.text2 }]}>{t.pickSongs}</Text>
+            <Text style={[styles.sectionLabel, { color: C.text2 }]}>{t.pickSongs ?? "Select songs"}</Text>
             {songs.map((song) => {
-              const on = pickedIds.includes(song._id);
+              const selected = pickedIds.includes(song._id);
               return (
                 <TouchableOpacity
                   key={song._id}
-                  style={[
-                    s.pickItem,
-                    {
-                      borderColor: on ? C.sky : C.border,
-                      backgroundColor: on ? C.skyPale : C.bg,
-                    },
-                  ]}
-                  onPress={() => togglePick(song._id)}
-                  activeOpacity={0.8}>
-                  <View
-                    style={[
-                      s.pickCb,
-                      {
-                        borderColor: on ? C.sky : C.border,
-                        backgroundColor: on ? C.sky : "transparent",
-                      },
-                    ]}>
-                    {on && <Feather name="check" size={12} color={C.bg} />}
+                  style={[styles.songSelect, { borderColor: selected ? C.sky : C.border, backgroundColor: selected ? C.skyPale : C.bg }]}
+                  onPress={() => toggleSongSelection(song._id)}
+                  activeOpacity={0.8}
+                >
+                  <View style={[styles.checkbox, { borderColor: selected ? C.sky : C.border, backgroundColor: selected ? C.sky : "transparent" }]}> 
+                    {selected && <Feather name="check" size={12} color={C.bg} />}
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text
-                      style={[s.pickName, { color: C.text }]}
-                      numberOfLines={1}>
-                      {song.title}
-                    </Text>
-                    <Text style={[s.pickSinger, { color: C.text2 }]}>
-                      {song.singerName}
-                    </Text>
+                    <Text style={[styles.songSelectTitle, { color: C.text }]} numberOfLines={1}>{song.title}</Text>
+                    <Text style={[styles.songSelectSinger, { color: C.text2 }]} numberOfLines={1}>{song.singerName}</Text>
                   </View>
-                  <View style={[s.keyChip, { backgroundColor: C.skyPale }]}>
-                    <Text style={[s.keyChipText, { color: C.sky }]}>
-                      {song.key}
-                    </Text>
+                  <View style={[styles.keyChip, { backgroundColor: C.skyPale }]}> 
+                    <Text style={[styles.keyChipText, { color: C.sky }]}>{song.key}</Text>
                   </View>
                 </TouchableOpacity>
               );
@@ -336,58 +242,66 @@ export default function AdminSetlistsTab() {
   );
 }
 
-const s = StyleSheet.create({
-  addBtn: {
+const styles = StyleSheet.create({
+  actionArea: { padding: Spacing.lg, paddingBottom: 4 },
+  newButton: {
     borderRadius: Radius.md,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 14,
     gap: 8,
+    paddingVertical: 14,
   },
-  addBtnText: { fontSize: 14, fontWeight: "700" },
-  card: {
-    marginHorizontal: Spacing.lg,
-    marginBottom: 12,
-    borderRadius: Radius.md,
+  newButtonText: { fontSize: 14, fontWeight: "700" },
+  listWrapper: { gap: 12, paddingHorizontal: Spacing.lg },
+  setlistCard: {
+    borderRadius: Radius.lg,
     borderWidth: 1,
     overflow: "hidden",
   },
-  cardHdr: {
+  setlistHeader: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    padding: 14,
     borderBottomWidth: 1,
   },
-  dateBadge: { borderRadius: 6, paddingHorizontal: 10, paddingVertical: 4 },
-  dateText: { fontSize: 11, fontWeight: "700" },
-  cardTheme: { fontSize: 14, fontWeight: "600", flex: 1 },
-  cardCnt: { fontSize: 11 },
+  setlistDate: {
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  setlistDateText: { fontSize: 11, fontWeight: "700" },
+  setlistTitle: { fontSize: 14, fontWeight: "700", flex: 1 },
+  setlistCount: { fontSize: 11, color: "#888" },
   songRow: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 10,
+    paddingVertical: 12,
     paddingHorizontal: 14,
-    paddingVertical: 10,
-    gap: 8,
   },
-  songBorder: { borderBottomWidth: 1 },
-  songNum: { fontSize: 11, fontWeight: "700", width: 16 },
-  songName: { fontSize: 13, fontWeight: "500" },
-  songSinger: { fontSize: 11 },
-  cardActions: { flexDirection: "row", borderTopWidth: 1 },
-  actionBtn: {
+  songIndex: { width: 18, fontSize: 12, fontWeight: "700" },
+  songTitle: { flex: 1, fontSize: 14, fontWeight: "600" },
+  songSinger: { fontSize: 12 },
+  footerRow: {
+    flexDirection: "row",
+    gap: 8,
+    padding: 12,
+    borderTopWidth: 1,
+  },
+  footerButton: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
+    borderRadius: 12,
     paddingVertical: 11,
+    borderWidth: 1,
   },
-  actionDivider: { width: 1 },
-  actionBtnText: { fontSize: 12, fontWeight: "600" },
-  modalHdr: {
+  footerText: { fontSize: 12, fontWeight: "700" },
+  modalHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -399,24 +313,23 @@ const s = StyleSheet.create({
   modalCancel: { fontSize: 15 },
   modalTitle: { fontSize: 15, fontWeight: "700" },
   modalSave: { fontSize: 15, fontWeight: "700" },
-  pickLabel: {
+  sectionLabel: {
     fontSize: 11,
     fontWeight: "700",
     textTransform: "uppercase",
-    letterSpacing: 0.6,
+    letterSpacing: 0.7,
     marginBottom: 10,
-    marginTop: 6,
   },
-  pickItem: {
+  songSelect: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    padding: 13,
     borderRadius: Radius.md,
-    marginBottom: 8,
     borderWidth: 1.5,
+    padding: 13,
+    marginBottom: 10,
   },
-  pickCb: {
+  checkbox: {
     width: 22,
     height: 22,
     borderRadius: 6,
@@ -424,8 +337,12 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  pickName: { fontSize: 14, fontWeight: "600" },
-  pickSinger: { fontSize: 12, marginTop: 2 },
-  keyChip: { borderRadius: 6, paddingHorizontal: 9, paddingVertical: 4 },
+  songSelectTitle: { fontSize: 14, fontWeight: "600" },
+  songSelectSinger: { fontSize: 12, color: "#777" },
+  keyChip: {
+    borderRadius: 6,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+  },
   keyChipText: { fontSize: 11, fontWeight: "700" },
 });
