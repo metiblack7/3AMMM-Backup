@@ -12,14 +12,15 @@ const ENV: Environment = __DEV__ ? 'development' : 'production';
 // In production: use your server's public IP/domain
 
 const API_URLS = {
-  development: process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000',
+  development: process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.4:5000',
   production: process.env.EXPO_PUBLIC_API_URL || 'https://sabaserver.vercel.app',
 } as const;
 
 export const API_URL = API_URLS[ENV];
 // ── Google Auth Configuration ────────────────────────────────────
 // Web client ID for Google OAuth
-export const GOOGLE_AUTH_CLIENT_ID = '204274728519-mjf0vtp5jj8gjltcff1ts8g5dv4lsn9v.apps.googleusercontent.com';
+export const GOOGLE_AUTH_CLIENT_ID =
+  "991044441560-iop8dkjg2drcs0vi105fe8j2t71g6dc2.apps.googleusercontent.com";
 // ── Feature Flags ────────────────────────────────────────────────────
 export const FEATURES = {
   OFFLINE_MODE: true,

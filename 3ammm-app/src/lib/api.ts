@@ -1,295 +1,231 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_URL, SYNC_CONFIG, log, logError } from './env';
-import { db } from './db';
-import { getNetworkStatus } from './network';
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { API_URL, SYNC_CONFIG } from "./env";
 
-const TOKEN_KEY = '3ammm_token';
+const TOKEN_KEY = "3ammm_token";
+const TIMEOUT_MS = 25000; // increased from 10s — Vercel cold start can take 15-25s
 
-// ── Cache layer ───────────────────────────────────────────────
-interface CacheEntry {
-  data: any;
-  ts: number;
-}
-
-const cache = new Map<string, CacheEntry>();
-const CACHE_TTL = 5 * 60 * 1000;
-
-export function clearCache(key?: string) {
-  if (key) {
-    cache.delete(key);
-  } else {
-    cache.clear();
-  }
-}
-
-function getCacheKey(path: string): string {
-  return path;
-}
-
-function getCachedData(cacheKey: string): any | null {
-  const entry = cache.get(cacheKey);
-  if (!entry) return null;
-  if (Date.now() - entry.ts > CACHE_TTL) {
-    cache.delete(cacheKey);
-    return null;
-  }
-  return entry.data;
-}
-
-function setCachedData(cacheKey: string, data: any) {
-  cache.set(cacheKey, { data, ts: Date.now() });
-}
-
-function invalidateCacheForResource(path: string) {
-  const resourceId = path.split('/').pop();
-  for (const key of cache.keys()) {
-    if (
-      key.includes(path.split('/').slice(0, -1).join('/')) ||
-      (resourceId && key.includes(resourceId))
-    ) {
-      cache.delete(key);
-    }
-  }
-}
-
-// ── Token helpers ─────────────────────────────────────────────
-export async function saveToken(token: string) {
-  await AsyncStorage.setItem(TOKEN_KEY, token);
-}
 export async function getToken(): Promise<string | null> {
   return AsyncStorage.getItem(TOKEN_KEY);
 }
-export async function clearToken() {
+
+export async function saveToken(token: string): Promise<void> {
+  await AsyncStorage.setItem(TOKEN_KEY, token);
+}
+
+export async function clearToken(): Promise<void> {
   await AsyncStorage.removeItem(TOKEN_KEY);
 }
 
-// ── Core fetch wrapper ────────────────────────────────────────
-export async function apiFetch(path: string, options: RequestInit = {}) {
-  const token = await getToken();
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...(options.headers as Record<string, string>),
-  };
-  if (token) headers['Authorization'] = `Bearer ${token}`;
 
-  const method = options.method || 'GET';
-  const isRead = method === 'GET';
-  const cacheKey = getCacheKey(path);
 
-  if (isRead) {
-    const cached = getCachedData(cacheKey);
-    if (cached) {
-      log(`Cache hit for ${path}`);
-      return cached;
-    }
-  }
+// ── Fetch with timeout + better error messages ────────────────
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit = {},
+  timeoutMs = TIMEOUT_MS,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), SYNC_CONFIG.TIMEOUT_MS);
-
-    const res = await fetch(`${API_URL}${path}`, {
+    const response = await fetch(url, {
       ...options,
-      headers,
       signal: controller.signal,
     });
-    clearTimeout(timeoutId);
-
-    const raw = await res.text();
-    let data: any = null;
-    if (raw) {
-      try {
-        data = JSON.parse(raw);
-      } catch {
-        throw new Error(
-          res.ok
-            ? 'Invalid server response.'
-            : `Server error (${res.status}). Check that the API is deployed correctly.`,
-        );
-      }
-    }
-
-    if (!res.ok) {
-      throw new Error(data?.message || `Request failed with status ${res.status}`);
-    }
-
-    if (isRead) {
-      setCachedData(cacheKey, data);
-    } else {
-      invalidateCacheForResource(path);
-    }
-
-    return data;
+    return response;
   } catch (err: any) {
-    if (err.name === 'AbortError') {
-      throw new Error('Request timed out. Check your internet connection.');
+    if (err.name === "AbortError") {
+      throw new Error(
+        "Request timed out. The server may be waking up — please try again in a moment.",
+      );
     }
-    logError(`API Error at ${path}:`, err.message);
-    throw err;
+    // Network unreachable
+    throw new Error(
+      "Cannot reach the server. Check your internet connection.",
+    );
+  } finally {
+    clearTimeout(timer);
   }
 }
 
-// ── API ───────────────────────────────────────────────────────
+// ── Retry wrapper — retries on timeout/network errors only ────
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit = {},
+  retries = 2,
+): Promise<Response> {
+  let lastError: Error = new Error("Unknown error");
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      // Give each retry a little more time
+      const timeout = TIMEOUT_MS + attempt * 5000;
+      return await fetchWithTimeout(url, options, timeout);
+    } catch (err: any) {
+      lastError = err;
+      // Only retry on timeout/network errors, not 4xx/5xx
+      const isRetryable =
+        err.message.includes("timed out") ||
+        err.message.includes("Cannot reach");
+
+      if (!isRetryable || attempt === retries) throw err;
+
+      // Wait before retrying (1s, 2s)
+      await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+    }
+  }
+
+  throw lastError;
+}
+
+// ── Main fetch wrapper ────────────────────────────────────────
+export async function apiFetch(
+  path: string,
+  options: RequestInit = {},
+): Promise<any> {
+  const token = await getToken();
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(options.headers as Record<string, string>),
+  };
+
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  const url = `${API_URL}${path}`;
+
+  const response = await fetchWithRetry(url, { ...options, headers });
+
+  // Parse response
+  let data: any;
+  const contentType = response.headers.get("content-type") ?? "";
+
+  if (contentType.includes("application/json")) {
+    data = await response.json();
+  } else {
+    const text = await response.text();
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = { message: text };
+    }
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      data?.message ||
+        data?.error ||
+        `Server error (${response.status})`,
+    );
+  }
+
+  return data;
+}
+
+// ── API methods ───────────────────────────────────────────────
 export const api = {
   auth: {
     login: (email: string, password: string) =>
-      apiFetch('/api/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
+      apiFetch("/api/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ email, password }),
+      }),
+    register: (
+      name: string,
+      email: string,
+      password: string,
+      singerName?: string,
+    ) =>
+      apiFetch("/api/auth/register", {
+        method: "POST",
+        body: JSON.stringify({ name, email, password, singerName }),
+      }),
+    me: () => apiFetch("/api/auth/me"),
 
-    register: (name: string, email: string, password: string, singerName?: string) =>
-      apiFetch('/api/auth/register', { method: 'POST', body: JSON.stringify({ name, email, password, singerName }) }),
-
-    googleAuth: (googleToken: string, googleEmail: string, googleName: string) =>
-      apiFetch('/api/auth/google', { method: 'POST', body: JSON.stringify({ googleToken, googleEmail, googleName }) }),
-
-    me: () => apiFetch('/api/auth/me'),
+     googleAuth: (
+    accessToken: string,
+    idToken: string,
+    serverAuthCode: string,
+  ) =>
+    apiFetch("/api/auth/google", {
+      method: "POST",
+      body: JSON.stringify({ accessToken, idToken, serverAuthCode }),
+    }),
   },
 
   songs: {
-    async getAll(params?: { search?: string; singer?: string }) {
-      try {
-        const q = new URLSearchParams();
-        if (params?.search) q.set('search', params.search);
-        if (params?.singer) q.set('singer', params.singer);
-        const data = await apiFetch(`/api/songs${q.toString() ? '?' + q : ''}`);
-        // ✅ only cache full unfiltered list
-        if (!params?.search && !params?.singer) {
-          await db.songs.save(data);
-        }
-        return data;
-      } catch (err) {
-        log('Using offline cache for songs');
-        const allSongs = await db.songs.getAll();
-        if (!params?.search && !params?.singer) return allSongs;
-        // ✅ client-side filter searches through lyrics array correctly
-        return allSongs.filter(s => {
-          const matchesSinger = !params?.singer || s.singerName === params.singer;
-          if (!params?.search) return matchesSinger;
-          const q = params.search.toLowerCase();
-          const lyricsText = Array.isArray(s.lyrics)
-            ? s.lyrics.map(l => `${l.s} ${l.t}`).join(' ').toLowerCase()
-            : '';
-          return matchesSinger && (
-            s.title.toLowerCase().includes(q) ||
-            lyricsText.includes(q)
-          );
-        });
-      }
+    getAll: (params?: Record<string, string>) => {
+      const qs = params
+        ? "?" + new URLSearchParams(params).toString()
+        : "";
+      return apiFetch(`/api/songs${qs}`);
     },
-
-    async getSingers() {
-      try {
-        return await apiFetch('/api/songs/singers');
-      } catch (err) {
-        log('Using offline cache for singers');
-        return await db.songs.getSingers();
-      }
-    },
-
-    async getOne(id: string) {
-      try {
-        const data = await apiFetch(`/api/songs/${id}`);
-        await db.songs.upsert(data);
-        return data;
-      } catch (err) {
-        log('Using offline cache for single song');
-        return await db.songs.getById(id);
-      }
-    },
-
-    create: (data: object) =>
-      apiFetch('/api/songs', { method: 'POST', body: JSON.stringify(data) }),
-    update: (id: string, data: object) =>
-      apiFetch(`/api/songs/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    getSingers: () => apiFetch("/api/songs/singers"),
+    getOne: (id: string) => apiFetch(`/api/songs/${id}`),
+    create: (data: any) =>
+      apiFetch("/api/songs", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    update: (id: string, data: any) =>
+      apiFetch(`/api/songs/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(data),
+      }),
     delete: (id: string) =>
-      apiFetch(`/api/songs/${id}`, { method: 'DELETE' }),
+      apiFetch(`/api/songs/${id}`, { method: "DELETE" }),
   },
 
   setlists: {
-    async getAll() {
-      try {
-        const data = await apiFetch('/api/setlists');
-        await db.setlists.save(data);
-        return data;
-      } catch (err) {
-        log('Using offline cache for setlists');
-        return await db.setlists.getAll();
-      }
-    },
-
-    async getOne(id: string) {
-      try {
-        const data = await apiFetch(`/api/setlists/${id}`);
-        await db.setlists.upsert(data);
-        return data;
-      } catch (err) {
-        log('Using offline cache for single setlist');
-        return await db.setlists.getById(id);
-      }
-    },
-
-    create: (data: object) =>
-      apiFetch('/api/setlists', { method: 'POST', body: JSON.stringify(data) }),
-    update: (id: string, data: object) =>
-      apiFetch(`/api/setlists/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    getAll: () => apiFetch("/api/setlists"),
+    create: (data: any) =>
+      apiFetch("/api/setlists", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    update: (id: string, data: any) =>
+      apiFetch(`/api/setlists/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(data),
+      }),
     delete: (id: string) =>
-      apiFetch(`/api/setlists/${id}`, { method: 'DELETE' }),
+      apiFetch(`/api/setlists/${id}`, { method: "DELETE" }),
   },
 
   favorites: {
-    async getAll() {
-      try {
-        return await apiFetch('/api/favorites');
-      } catch (err) {
-        log('Using offline cache for favorites');
-        return await db.favorites.getAll();
-      }
-    },
-
-    // ✅ always returns a plain string[] — never wrapped in { ids }
-    async getIds(): Promise<string[]> {
-      try {
-        const data = await apiFetch('/api/favorites/ids');
-        // server may return { ids: [...] } or plain array — normalise both
-        const ids: string[] = Array.isArray(data) ? data : (data.ids ?? []);
-        await db.favorites.save(ids);
-        return ids;
-      } catch (err) {
-        log('Using offline cache for favorite IDs');
-        return await db.favorites.getAll();
-      }
-    },
-
-    async toggle(songId: string) {
-      try {
-        const result = await apiFetch(`/api/favorites/${songId}`, { method: 'POST' });
-        await db.favorites.toggle(songId);
-        // ✅ normalise response — server returns { favorited } or { isFavorite }
-        return {
-          favorited: result.favorited ?? result.isFavorite ?? false,
-        };
-      } catch (err) {
-        log('Toggling favorite locally');
-        const favorited = await db.favorites.toggle(songId);
-        return { favorited };
-      }
-    },
+    getAll: () => apiFetch("/api/favorites"),
+    getIds: () => apiFetch("/api/favorites/ids"),
+    toggle: (songId: string) =>
+      apiFetch(`/api/favorites/${songId}`, { method: "POST" }),
   },
 
   notifications: {
-    async getAll() {
-      try {
-        return await apiFetch('/api/notifications');
-      } catch (err) {
-        log('Failed to get notifications');
-        return [];
-      }
-    },
+    getAll: () => apiFetch("/api/notifications"),
   },
 
   users: {
-    getAll: () => apiFetch('/api/users'),
-    getStats: () => apiFetch('/api/users/stats'),
+    getAll: () => apiFetch("/api/users"),
+    getStats: () => apiFetch("/api/users/stats"),
+    savePushToken: (token: string) =>
+      apiFetch("/api/users/push-token", {
+        method: "POST",
+        body: JSON.stringify({ token }),
+      }),
   },
-};
 
-export { API_URL };
+  feedback: {
+    send: (message: string, email?: string) =>
+      apiFetch("/api/feedback", {
+        method: "POST",
+        body: JSON.stringify({ message, email }),
+      }),
+  },
+
+  googleAuth: (accessToken: string, idToken: string, serverAuthCode: string) =>
+  apiFetch("/api/auth/google", {
+    method: "POST",
+    body: JSON.stringify({ accessToken, idToken, serverAuthCode }),
+  }),
+};

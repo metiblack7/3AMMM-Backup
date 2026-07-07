@@ -18,10 +18,12 @@ import {
 } from "react-native";
 import { BlurView } from "expo-blur";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as WebBrowser from "expo-web-browser";
 import { api, saveToken, getToken, clearToken } from "./api";
-import { initiateGoogleAuth, getUserInfoFromIdToken } from "./googleAuth";
-import { GOOGLE_AUTH_CLIENT_ID } from "./env";
+import {
+  useGoogleAuth,
+  fetchGoogleUserInfo,
+  getAccessTokenFromResponse,
+} from "./googleAuth";
 import { startAutoSync, syncAll } from "./sync";
 import { useNetworkStatus } from "./network";
 import translations, { LangKey } from "./i18n";
@@ -80,6 +82,7 @@ interface AppProviderProps {
   children?: ReactNode;
 }
 
+// ── Splash overlay (unchanged) ────────────────────────────────
 function SplashOverlay({
   loading,
   onExitComplete,
@@ -155,9 +158,7 @@ function SplashOverlay({
   useEffect(() => {
     if (loading) return;
 
-    if (exitTimerRef.current) {
-      clearTimeout(exitTimerRef.current);
-    }
+    if (exitTimerRef.current) clearTimeout(exitTimerRef.current);
 
     exitTimerRef.current = setTimeout(() => {
       if (exitingRef.current) return;
@@ -212,9 +213,7 @@ function SplashOverlay({
     }, SPLASH_HOLD_MS);
 
     return () => {
-      if (exitTimerRef.current) {
-        clearTimeout(exitTimerRef.current);
-      }
+      if (exitTimerRef.current) clearTimeout(exitTimerRef.current);
     };
   }, [
     loading,
@@ -247,13 +246,7 @@ function SplashOverlay({
         ]}>
         <Image
           source={require("../../assets/splash.png")}
-          style={[
-            styles.logo,
-            {
-              width: logoWidth,
-              height: logoHeight,
-            },
-          ]}
+          style={[styles.logo, { width: logoWidth, height: logoHeight }]}
           resizeMode="contain"
         />
 
@@ -276,13 +269,14 @@ function SplashOverlay({
               transform: [{ translateY: subtitleTranslateY }],
             },
           ]}>
-          ሳባ መዝሙሮች
+          ሳባ ወላይትኛ መዝሙሮች
         </Animated.Text>
       </Animated.View>
     </Animated.View>
   );
 }
 
+// ── AppProvider ───────────────────────────────────────────────
 export function AppProvider({ children }: AppProviderProps) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [lang, setLang] = useState<LangKey>("en");
@@ -300,6 +294,71 @@ export function AppProvider({ children }: AppProviderProps) {
   const C = theme === "dark" ? DarkColors : LightColors;
   const darkMode = theme === "dark";
 
+  // ── Google auth hook (must be called at top level) ────────────
+  // useAuthRequest sets up the OAuth flow. promptAsync() opens the
+  // browser/sheet. We watch `googleResponse` in a useEffect to
+  // complete the sign-in once the user returns.
+  const { request, response: googleResponse, promptAsync } = useGoogleAuth();
+
+  // Resolve / reject ref so the async signInWithGoogle() promise
+  // can be settled from inside the useEffect below.
+  const googlePromiseRef = useRef<{
+    resolve: () => void;
+    reject: (err: Error) => void;
+  } | null>(null);
+
+  // ── Handle Google auth response ───────────────────────────────
+  useEffect(() => {
+    if (!googleResponse) return;
+
+    const settle = googlePromiseRef.current;
+    googlePromiseRef.current = null;
+
+    (async () => {
+      try {
+        // User cancelled or dismissed
+        if (
+          googleResponse.type === "cancel" ||
+          googleResponse.type === "dismiss"
+        ) {
+          settle?.resolve(); // treat cancel as a no-op, not an error
+          return;
+        }
+
+        if (googleResponse.type !== "success") {
+          throw new Error("Google sign-in failed.");
+        }
+
+        const accessToken = getAccessTokenFromResponse(googleResponse);
+        if (!accessToken) {
+          throw new Error("No access token returned from Google.");
+        }
+
+        // Fetch profile from Google
+        const googleUser = await fetchGoogleUserInfo(accessToken);
+
+        // Exchange with your backend
+        const { token, user } = await api.auth.googleAuth(
+          accessToken,
+          googleUser.id,
+          googleUser.email,
+        );
+
+        await saveToken(token);
+        setProfile(user);
+        await registerForPushNotificationsOnSignUp(user.name).catch(() => {});
+        await AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(user));
+
+        settle?.resolve();
+      } catch (err: any) {
+        const message = err?.message || "Google sign-in failed";
+        setAuthError(message);
+        settle?.reject(new Error(message));
+      }
+    })();
+  }, [googleResponse]);
+
+  // ── App initialisation ────────────────────────────────────────
   useEffect(() => {
     let mounted = true;
 
@@ -311,8 +370,7 @@ export function AppProvider({ children }: AppProviderProps) {
         if (token) {
           const savedProfile = await AsyncStorage.getItem(PROFILE_KEY);
           if (savedProfile && mounted) {
-            const parsed = JSON.parse(savedProfile);
-            setProfile(parsed);
+            setProfile(JSON.parse(savedProfile));
           }
         }
 
@@ -360,12 +418,18 @@ export function AppProvider({ children }: AppProviderProps) {
     };
   }, [isOnline]);
 
+  // ── Auth functions ────────────────────────────────────────────
   async function signIn(email: string, password: string) {
     setAuthError("");
-    const { token, user } = await api.auth.login(email, password);
-    await saveToken(token);
-    setProfile(user);
-    await AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(user));
+    try {
+      const { token, user } = await api.auth.login(email, password);
+      await saveToken(token);
+      setProfile(user);
+      await AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(user));
+    } catch (err: any) {
+      setAuthError(err.message || "Sign in failed");
+      throw err;
+    }
   }
 
   async function signUp(
@@ -375,54 +439,47 @@ export function AppProvider({ children }: AppProviderProps) {
     singerName?: string,
   ) {
     setAuthError("");
-    const { token, user } = await api.auth.register(
-      name,
-      email,
-      password,
-      singerName,
-    );
-    await saveToken(token);
-    setProfile(user);
-
-    await registerForPushNotificationsOnSignUp(user.name).catch(() => {});
-
-    await AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(user));
-  }
-
-  async function signInWithGoogle() {
-    setAuthError("");
     try {
-      const authResponse = await initiateGoogleAuth(GOOGLE_AUTH_CLIENT_ID);
-
-      // Web redirects away; native cancel/dismiss returns null.
-      if (Platform.OS === "web") return;
-
-      if (!authResponse?.access_token) {
-        throw new Error("Google sign-in was cancelled.");
-      }
-
-      const { token, user } = await api.auth.googleAuth(
-        authResponse.access_token,
-        "",
-        "",
+      const { token, user } = await api.auth.register(
+        name,
+        email,
+        password,
+        singerName,
       );
-
       await saveToken(token);
       setProfile(user);
       await registerForPushNotificationsOnSignUp(user.name).catch(() => {});
       await AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(user));
     } catch (err: any) {
-      setAuthError(err.message || "Google sign-in failed");
+      setAuthError(err.message || "Sign up failed");
       throw err;
     }
+  }
+
+  // signInWithGoogle just triggers the native sheet and returns a
+  // promise that resolves/rejects once the useEffect above handles
+  // the OAuth response. This keeps the async interface identical to
+  // before so no changes are needed in LoginScreen.
+  async function signInWithGoogle() {
+    setAuthError("");
+
+    if (!request) {
+      throw new Error("Google sign-in is not ready yet. Please try again.");
+    }
+
+    return new Promise<void>((resolve, reject) => {
+      googlePromiseRef.current = { resolve, reject };
+      promptAsync().catch((err) => {
+        googlePromiseRef.current = null;
+        reject(err);
+      });
+    });
   }
 
   async function loginAsGuest() {
     setAuthError("");
     try {
-      // Drop any real JWT so guest mode is not overwritten on next launch.
       await clearToken();
-
       const guestProfile: Profile = {
         _id: "guest_" + Date.now(),
         name: "Guest User",

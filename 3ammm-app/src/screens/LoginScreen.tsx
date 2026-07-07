@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   View,
   Text,
@@ -176,82 +176,143 @@ export default function LoginScreen({
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false);
   const [showEmailLogin, setShowEmailLogin] = useState(false);
+
+  // ── Unified loading state ─────────────────────────────────────
+  // Prevents two auth actions running at once and ensures each
+  // button only shows its own spinner / disabled state.
+const [authLoading, setAuthLoading] = useState<
+  "email" | "google" | "guest" | null
+>(null);
+  const isEmailLoading = authLoading === "email";
+  const isGoogleLoading = authLoading === "google";
+  const isGuestLoading = authLoading === "guest";
+  const isAnyLoading = authLoading !== null;
 
   const scrollRef = useRef<ScrollView>(null);
 
+  // ── Web autofill style fix ────────────────────────────────────
+  // Browsers force a yellow background on autofilled inputs; this
+  // overrides it to match our dark/light theme. The style tag is
+  // scoped by id and cleaned up on unmount to avoid leaks.
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+
+    const styleId = "login-autofill-fix";
+    const existing = document.getElementById(styleId);
+    if (existing) existing.remove(); // remove stale tag on theme change
+
+    const bg = isDark ? "rgb(2,22,36)" : "rgb(255,255,255)";
+    const text = isDark ? "rgb(236,244,250)" : "rgb(10,30,46)";
+
+    const style = document.createElement("style");
+    style.id = styleId;
+    style.innerHTML = `
+      input:-webkit-autofill,
+      input:-webkit-autofill:hover,
+      input:-webkit-autofill:focus {
+        -webkit-text-fill-color: ${text} !important;
+        -webkit-box-shadow: 0 0 0px 1000px ${bg} inset !important;
+        box-shadow: 0 0 0px 1000px ${bg} inset !important;
+        transition: background-color 9999s ease-in-out 0s;
+      }
+    `;
+    document.head.appendChild(style);
+
+    return () => {
+      document.getElementById(styleId)?.remove();
+    };
+  }, [isDark]);
+
   function scrollToInputs() {
-    // Give the keyboard a moment to open, then scroll the fields into view
     setTimeout(() => {
       scrollRef.current?.scrollToEnd({ animated: true });
     }, 150);
   }
 
+  // ── Handlers ──────────────────────────────────────────────────
   async function handleEmailLogin() {
+    if (isAnyLoading) return;
     if (!email || !password) {
       setError(t.fillAll);
       return;
     }
-    setLoading(true);
+    setAuthLoading("email");
     setError("");
     try {
       await signIn(email.trim(), password);
     } catch (err: any) {
       const message = err.message || t.invalidCreds;
-
-      if (message.includes('Database connection failed')) {
-        setError('Server cannot reach the database. Check Vercel env vars (MONGODB_URI) and redeploy.');
-      } else if (message.includes('Network request failed') || message.includes('timed out')) {
-        setError('Cannot reach the server. Check your internet connection.');
+      if (message.includes("Database connection failed")) {
+        setError(
+          "Server cannot reach the database. Check Vercel env vars (MONGODB_URI) and redeploy.",
+        );
       } else {
         setError(message);
       }
     } finally {
-      setLoading(false);
+      setAuthLoading(null);
     }
   }
 
   async function handleGoogleSignIn() {
-    setGoogleLoading(true);
+    if (isAnyLoading) return;
+    setAuthLoading("google");
     setError("");
     try {
       await signInWithGoogle();
+      // signInWithGoogle resolves on cancel too (no-op) so no need
+      // to special-case it here — errors are real failures only.
     } catch (err: any) {
-      const message = err.message || "Google sign-in failed";
+      const message: string = err?.message || "Google sign-in failed";
+      const code: string = err?.code || "";
 
-      // Provide helpful error messages
-      if (message.includes("redirect_uri")) {
-        setError(
-          "Google OAuth not configured for this environment. Use email login instead.",
-        );
-      } else if (message.includes("invalid_client")) {
-        setError("Invalid Google Client ID. Please check configuration.");
-      } else {
-        setError(message);
+      // User closed the sheet on purpose — not an error
+      const wasCancelled =
+        /cancel/i.test(message) ||
+        /dismiss/i.test(message) ||
+        /cancel/i.test(code);
+
+      if (!wasCancelled) {
+        if (message.includes("redirect_uri")) {
+          setError(
+            "Google OAuth not configured for this environment. Use email login instead.",
+          );
+        } else if (message.includes("invalid_client")) {
+          setError("Invalid Google Client ID. Please check configuration.");
+        } else {
+          setError(message);
+        }
       }
     } finally {
-      setGoogleLoading(false);
+      setAuthLoading(null);
     }
   }
 
   async function handleContinueGuest() {
+    if (isAnyLoading) return;
+    setAuthLoading("guest");
+    setError("");
     try {
-      setGoogleLoading(true);
-      setError("");
       await loginAsGuest();
     } catch (err: any) {
       setError(err.message || "Guest login failed");
     } finally {
-      setGoogleLoading(false);
+      setAuthLoading(null);
     }
+  }
+
+  function handleToggleEmailLogin() {
+    if (isAnyLoading) return;
+    setError("");
+    setShowEmailLogin((v) => !v);
   }
 
   return (
     <View style={{ flex: 1 }}>
+      {/* Fix: respect theme in status bar */}
       <StatusBar
-        barStyle="light-content"
+        barStyle={isDark ? "light-content" : "dark-content"}
         backgroundColor="transparent"
         translucent
       />
@@ -288,6 +349,7 @@ export default function LoginScreen({
           <View style={s.topRow}>
             <TouchableOpacity
               onPress={toggleLang}
+              disabled={isAnyLoading}
               style={[
                 s.langPill,
                 {
@@ -295,6 +357,7 @@ export default function LoginScreen({
                   backgroundColor: isDark
                     ? "rgba(135,206,235,0.08)"
                     : "rgba(135,206,235,0.14)",
+                  opacity: isAnyLoading ? 0.5 : 1,
                 },
               ]}
               activeOpacity={0.8}>
@@ -305,14 +368,13 @@ export default function LoginScreen({
             </TouchableOpacity>
           </View>
 
-          {/* ── HERO (logo only) ─────────────────────── */}
+          {/* ── HERO ─────────────────────────────────── */}
           <View style={s.hero}>
             <Image
               source={require("../../assets/favicon.png")}
               style={s.logoImage}
               resizeMode="contain"
             />
-
             <LinearGradient
               colors={[
                 "transparent",
@@ -353,7 +415,7 @@ export default function LoginScreen({
               Access your worship space
             </Text>
 
-            {/* ── GOOGLE SIGN-IN BUTTON ─────────────────── */}
+            {/* ── GOOGLE SIGN-IN ────────────────────────── */}
             <TouchableOpacity
               style={[
                 s.socialBtnWrap,
@@ -362,19 +424,19 @@ export default function LoginScreen({
                   backgroundColor: isDark
                     ? "rgba(255,255,255,0.06)"
                     : "rgba(255,255,255,0.5)",
-                  opacity: googleLoading ? 0.7 : 1,
+                  opacity: isAnyLoading ? 0.6 : 1,
                 },
               ]}
               onPress={handleGoogleSignIn}
-              disabled={googleLoading}
+              disabled={isAnyLoading}
               activeOpacity={0.85}>
               <MaterialCommunityIcons name="google" size={18} color={C.sky} />
               <Text style={[s.socialBtnText, { color: C.text }]}>
-                {googleLoading ? "Signing in..." : "Continue with Google"}
+                {isGoogleLoading ? "Signing in..." : "Continue with Google"}
               </Text>
             </TouchableOpacity>
 
-            {/* ── GUEST LOGIN BUTTON ─────────────────────── */}
+            {/* ── GUEST LOGIN ───────────────────────────── */}
             <TouchableOpacity
               style={[
                 s.socialBtnWrap,
@@ -383,24 +445,26 @@ export default function LoginScreen({
                   backgroundColor: isDark
                     ? "rgba(255,255,255,0.06)"
                     : "rgba(255,255,255,0.5)",
+                  opacity: isAnyLoading ? 0.6 : 1,
                 },
               ]}
               onPress={handleContinueGuest}
+              disabled={isAnyLoading}
               activeOpacity={0.85}>
               <Feather name="user" size={18} color={C.text2} />
               <Text style={[s.socialBtnText, { color: C.text }]}>
-                Continue without login
+                {isGuestLoading ? "Please wait..." : "Continue without login"}
               </Text>
             </TouchableOpacity>
 
-            {/* ── DIVIDER ────────────────────────────────── */}
+            {/* ── DIVIDER ──────────────────────────────── */}
             <View style={s.dividerWrap}>
               <View style={[s.dividerLine, { backgroundColor: C.border }]} />
               <Text style={[s.dividerText, { color: C.text3 }]}>OR</Text>
               <View style={[s.dividerLine, { backgroundColor: C.border }]} />
             </View>
 
-            {/* ── ERROR MESSAGE ──────────────────────────── */}
+            {/* ── ERROR ────────────────────────────────── */}
             {error ? (
               <View
                 style={[
@@ -417,8 +481,9 @@ export default function LoginScreen({
 
             {/* ── TOGGLE EMAIL LOGIN ────────────────────── */}
             <TouchableOpacity
-              style={s.toggleLoginBtn}
-              onPress={() => setShowEmailLogin(!showEmailLogin)}
+              style={[s.toggleLoginBtn, { opacity: isAnyLoading ? 0.5 : 1 }]}
+              onPress={handleToggleEmailLogin}
+              disabled={isAnyLoading}
               activeOpacity={0.7}>
               <Text style={[s.toggleLoginText, { color: C.sky }]}>
                 {showEmailLogin ? "Hide Email Login" : "Use Email & Password"}
@@ -430,7 +495,7 @@ export default function LoginScreen({
               />
             </TouchableOpacity>
 
-            {/* ── EMAIL/PASSWORD FIELDS (COLLAPSIBLE) ───– */}
+            {/* ── EMAIL / PASSWORD FIELDS ───────────────── */}
             {showEmailLogin && (
               <>
                 <GlassField
@@ -456,13 +521,13 @@ export default function LoginScreen({
                 />
 
                 <TouchableOpacity
-                  style={[s.btnWrap, { opacity: loading ? 0.78 : 1 }]}
+                  style={[s.btnWrap, { opacity: isAnyLoading ? 0.78 : 1 }]}
                   onPress={handleEmailLogin}
-                  disabled={loading}
+                  disabled={isAnyLoading}
                   activeOpacity={0.88}>
                   <LinearGradient
                     colors={
-                      loading
+                      isEmailLoading
                         ? [C.goldDark, C.goldDark]
                         : ["#fcc55a", "#fbb040", "#d4920e"]
                     }
@@ -471,9 +536,9 @@ export default function LoginScreen({
                     style={s.btn}>
                     <View style={s.btnSheen} />
                     <Text style={s.btnText}>
-                      {loading ? t.signingIn : t.btnSignIn}
+                      {isEmailLoading ? t.signingIn : t.btnSignIn}
                     </Text>
-                    {!loading && (
+                    {!isEmailLoading && (
                       <Feather name="arrow-right" size={18} color="#010f18" />
                     )}
                   </LinearGradient>
@@ -513,7 +578,6 @@ const s = StyleSheet.create({
     flexGrow: 1,
     paddingHorizontal: 24,
   },
-
   topRow: {
     flexDirection: "row",
     justifyContent: "flex-end",
@@ -532,7 +596,6 @@ const s = StyleSheet.create({
     fontSize: 12,
     fontWeight: "700",
   },
-
   hero: {
     alignItems: "center",
     paddingTop: 20,
@@ -548,7 +611,6 @@ const s = StyleSheet.create({
     height: 1.5,
     borderRadius: 1,
   },
-
   card: {
     borderRadius: 24,
     borderWidth: 1,
@@ -584,7 +646,6 @@ const s = StyleSheet.create({
     lineHeight: 18,
     marginBottom: 24,
   },
-
   socialBtnWrap: {
     flexDirection: "row",
     alignItems: "center",
@@ -600,7 +661,6 @@ const s = StyleSheet.create({
     fontWeight: "600",
     letterSpacing: 0.3,
   },
-
   dividerWrap: {
     flexDirection: "row",
     alignItems: "center",
@@ -616,7 +676,6 @@ const s = StyleSheet.create({
     fontWeight: "700",
     letterSpacing: 1.5,
   },
-
   toggleLoginBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -629,7 +688,6 @@ const s = StyleSheet.create({
     fontSize: 13,
     fontWeight: "600",
   },
-
   errorWrap: {
     flexDirection: "row",
     alignItems: "center",
@@ -644,7 +702,6 @@ const s = StyleSheet.create({
     fontSize: 13,
     flex: 1,
   },
-
   btnWrap: {
     borderRadius: 16,
     overflow: "hidden",
@@ -684,7 +741,6 @@ const s = StyleSheet.create({
     color: "#010f18",
     letterSpacing: 0.6,
   },
-
   switchRow: {
     flexDirection: "row",
     justifyContent: "center",
@@ -699,7 +755,6 @@ const s = StyleSheet.create({
     fontSize: 14,
     fontWeight: "700",
   },
-
   footer: {
     flexDirection: "row",
     alignItems: "center",

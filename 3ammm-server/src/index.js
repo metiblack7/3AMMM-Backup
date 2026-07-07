@@ -3,27 +3,31 @@ const express = require('express');
 const cors = require('cors');
 const connectDB = require('./config/db');
 
-const authRoutes = require('./routes/auth');
-const songRoutes = require('./routes/songs');
-const setlistRoutes = require('./routes/setlists');
+const authRoutes      = require('./routes/auth');
+const songRoutes      = require('./routes/songs');
+const setlistRoutes   = require('./routes/setlists');
 const { favRouter, notifRouter } = require('./routes/favorites');
-const userRoutes = require('./routes/users');
-const feedbackRoutes = require('./routes/feedback');
+const userRoutes      = require('./routes/users');
+const feedbackRoutes  = require('./routes/feedback');
 
 const app = express();
 
 const NODE_ENV = process.env.NODE_ENV || 'development';
-const PORT = process.env.PORT || 5000;
+const PORT     = process.env.PORT || 5000;
 
-const getCorsOptions = () => ({
+// Connect DB on every cold start (required for Vercel serverless)
+connectDB().catch((err) => {
+  console.error('DB connection error:', err);
+});
+
+app.use(cors({
   origin: true,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   maxAge: 86400,
-});
+}));
 
-app.use(cors(getCorsOptions()));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
@@ -34,13 +38,13 @@ if (NODE_ENV === 'development') {
   });
 }
 
-app.use('/api/auth', authRoutes);
-app.use('/api/songs', songRoutes);
-app.use('/api/setlists', setlistRoutes);
-app.use('/api/favorites', favRouter);
+app.use('/api/auth',          authRoutes);
+app.use('/api/songs',         songRoutes);
+app.use('/api/setlists',      setlistRoutes);
+app.use('/api/favorites',     favRouter);
 app.use('/api/notifications', notifRouter);
-app.use('/api/users', userRoutes);
-app.use('/api/feedback', feedbackRoutes);
+app.use('/api/users',         userRoutes);
+app.use('/api/feedback',      feedbackRoutes);
 
 app.get('/api/app/version', (_req, res) => {
   res.json({
@@ -68,6 +72,7 @@ app.use((err, _req, res, _next) => {
   });
 });
 
+// Local dev only
 if (require.main === module) {
   connectDB().then(() => {
     app.listen(PORT, () => {

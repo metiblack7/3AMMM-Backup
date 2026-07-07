@@ -1,142 +1,60 @@
+import * as Google from "expo-auth-session/providers/google";
 import * as WebBrowser from "expo-web-browser";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Platform } from "react-native";
+import { makeRedirectUri } from "expo-auth-session";
 
-/**
- * Google OAuth implementation for React Native/Web
- * Uses authorization code flow
- */
+WebBrowser.maybeCompleteAuthSession();
 
-// Generate a random string
-function generateRandomString(length: number = 43): string {
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
-  let result = "";
-  for (let i = 0; i < length; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return result;
+export const ANDROID_CLIENT_ID =
+  "991044441560-q9fc0fh9vjthgdu12a6mri50bgv2h178.apps.googleusercontent.com";
+
+export const WEB_CLIENT_ID =
+  "991044441560-iop8dkjg2drcs0vi105fe8j2t71g6dc2.apps.googleusercontent.com";
+
+export function useGoogleAuth() {
+  const [request, response, promptAsync] = Google.useAuthRequest({
+    androidClientId: ANDROID_CLIENT_ID,
+    webClientId:     WEB_CLIENT_ID,
+    scopes:          ["openid", "profile", "email"],
+  });
+
+  return { request, response, promptAsync };
 }
 
-// Get the redirect URL based on platform
-function getRedirectUrl(): string {
-  if (Platform.OS === "web") {
-    // For web, use current origin
-    return typeof window !== "undefined" ? window.location.origin + "/" : "http://localhost:8082/";
-  }
-  // For native, use custom scheme
-  return "exp+saba://";
-}
-
-interface GoogleAuthResponse {
-  access_token: string;
-  id_token?: string;
-  token_type: string;
-  expires_in: number;
+// Fetch user info from Google using the access token
+export async function fetchGoogleUserInfo(accessToken: string): Promise<{
+  id: string;
   email: string;
   name: string;
+  picture: string;
+  given_name: string;
+  family_name: string;
+}> {
+  const response = await fetch(
+    "https://www.googleapis.com/oauth2/v3/userinfo",
+    {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error("Failed to fetch Google user info");
+  }
+
+  const data = await response.json();
+  return {
+    id:          data.sub,
+    email:       data.email,
+    name:        data.name,
+    picture:     data.picture,
+    given_name:  data.given_name,
+    family_name: data.family_name,
+  };
 }
 
-export async function initiateGoogleAuth(clientId: string): Promise<GoogleAuthResponse | null> {
-  try {
-    const redirectUrl = getRedirectUrl();
-    
-    // Ensure redirectUrl is a string
-    if (!redirectUrl || typeof redirectUrl !== "string") {
-      throw new Error("Invalid redirect URL");
-    }
-
-    // Generate state for CSRF protection
-    const state = generateRandomString(32);
-    
-    // Save state for later verification
-    await AsyncStorage.setItem("google_auth_state", state);
-
-    // Build authorization URL with valid string parameters
-    const authParams: Record<string, string> = {
-      client_id: String(clientId),
-      redirect_uri: String(redirectUrl),
-      response_type: "code",
-      scope: "openid email profile",
-      state: String(state),
-      access_type: "offline",
-    };
-
-    const queryString = Object.entries(authParams)
-      .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
-      .join("&");
-
-    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${queryString}`;
-
-    // Handle web platform
-    if (Platform.OS === "web") {
-      if (typeof window !== "undefined") {
-        window.location.href = authUrl;
-      }
-      return null;
-    }
-
-    // For native, use WebBrowser
-    WebBrowser.maybeCompleteAuthSession();
-    const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUrl);
-
-    if (result.type === "success") {
-      // Parse the redirect URL to get the authorization code
-      try {
-        const urlStr = result.url || "";
-        const codeMatch = urlStr.match(/[?&]code=([^&]+)/);
-        const stateMatch = urlStr.match(/[?&]state=([^&]+)/);
-        const code = codeMatch ? decodeURIComponent(codeMatch[1]) : null;
-        const returnedState = stateMatch ? decodeURIComponent(stateMatch[1]) : null;
-        
-        // Verify state matches to prevent CSRF
-        const savedState = await AsyncStorage.getItem("google_auth_state");
-        if (returnedState !== savedState) {
-          throw new Error("State mismatch");
-        }
-        
-        if (code) {
-          return {
-            access_token: code,
-            token_type: "authorization_code",
-            expires_in: 3600,
-            email: "",
-            name: "",
-          };
-        }
-      } catch (parseErr) {
-        console.error("Error parsing auth response:", parseErr);
-        throw parseErr;
-      }
-    }
-    
-    return null;
-  } catch (err) {
-    console.error("Google auth error:", err);
-    throw err;
+// Handle the auth response and extract the access token
+export function getAccessTokenFromResponse(response: any): string | null {
+  if (response?.type === "success") {
+    return response.authentication?.accessToken ?? null;
   }
-}
-
-/**
- * Get user info from Google ID token (base64 decode)
- */
-export async function getUserInfoFromIdToken(idToken: string): Promise<{ email: string; name: string }> {
-  try {
-    // Decode JWT token (ID token)
-    const parts = idToken.split(".");
-    if (parts.length !== 3) {
-      throw new Error("Invalid token format");
-    }
-
-    // Base64 decode (handle URL-safe base64)
-    let decodedStr = atob(parts[1].replace(/-/g, "+").replace(/_/g, "/"));
-    const decoded = JSON.parse(decodedStr);
-
-    return {
-      email: decoded.email,
-      name: decoded.name,
-    };
-  } catch (err) {
-    console.error("Error decoding ID token:", err);
-    throw err;
-  }
+  return null;
 }

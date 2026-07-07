@@ -21,7 +21,6 @@ import {
   Keyboard,
   NativeSyntheticEvent,
   NativeScrollEvent,
-  ViewToken,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Feather } from "@expo/vector-icons";
@@ -41,28 +40,22 @@ interface Props {
 
 type NumberedSong = Song & { pageNumber: number };
 
-const AnimatedFlatList = Animated.createAnimatedComponent(
-  FlatList<NumberedSong>,
-);
-
 const STAGGER_CAP = 280;
 const STAGGER_STEP = 45;
 
 // Collapsible header content height (search box + pills).
-// Does NOT include the safe-area top inset — that's added separately.
 const HEADER_CONTENT_HEIGHT = 118;
 
-// Card height + gap so getItemLayout is pixel-accurate.
-// Spacing.md is 12 in your theme.
-const CARD_GAP = Spacing.md; // 12
+// Card height — used for getItemLayout.
 const CARD_HEIGHT = 92;
+const CARD_GAP = Spacing.md;
 const CARD_ROW_HEIGHT = CARD_HEIGHT + CARD_GAP;
 
 function staggerDelay(index: number) {
   return Math.min((index % 10) * STAGGER_STEP, STAGGER_CAP);
 }
 
-// ── Animated song card ────────────────────────────────────────
+// ── Song card — mount stagger only, no scroll-driven animation ──
 const AnimatedSongCard = React.memo(function AnimatedSongCard({
   item,
   index,
@@ -70,8 +63,6 @@ const AnimatedSongCard = React.memo(function AnimatedSongCard({
   C,
   cardGradients,
   onOpenSong,
-  isEdge,
-  scrollActive,
 }: {
   item: NumberedSong;
   index: number;
@@ -79,8 +70,6 @@ const AnimatedSongCard = React.memo(function AnimatedSongCard({
   C: ReturnType<typeof useTheme>["C"];
   cardGradients: (category: string) => [string, string];
   onOpenSong: (song: Song) => void;
-  isEdge: boolean;
-  scrollActive: Animated.Value;
 }) {
   const mountOpacity = useRef(new Animated.Value(0)).current;
   const mountTranslateY = useRef(new Animated.Value(22)).current;
@@ -117,52 +106,13 @@ const AnimatedSongCard = React.memo(function AnimatedSongCard({
     ]).start();
   }, [item._id, index, mountOpacity, mountTranslateY, mountScale]);
 
-  // Edge squish — only visible while scrollActive > 0
-  const edgeAnim = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.timing(edgeAnim, {
-      toValue: isEdge ? 1 : 0,
-      duration: 220,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    }).start();
-  }, [isEdge, edgeAnim]);
-
-  const squish = useMemo(
-    () => Animated.multiply(edgeAnim, scrollActive),
-    [edgeAnim, scrollActive],
-  );
-
-  const squishScale = useMemo(
-    () => squish.interpolate({ inputRange: [0, 1], outputRange: [1, 0.93] }),
-    [squish],
-  );
-
-  const squishOpacity = useMemo(
-    () => squish.interpolate({ inputRange: [0, 1], outputRange: [1, 0.55] }),
-    [squish],
-  );
-
-  const combinedScale = useMemo(
-    () => Animated.multiply(mountScale, squishScale),
-    [mountScale, squishScale],
-  );
-
-  const combinedOpacity = useMemo(
-    () => Animated.multiply(mountOpacity, squishOpacity),
-    [mountOpacity, squishOpacity],
-  );
-
   const [g1, g2] = cardGradients(item.category);
 
   return (
     <Animated.View
       style={{
-        opacity: combinedOpacity,
-        transform: [{ translateY: mountTranslateY }, { scale: combinedScale }],
-        // Bottom margin here instead of gap in contentContainerStyle
-        // so getItemLayout stays perfectly in sync.
+        opacity: mountOpacity,
+        transform: [{ translateY: mountTranslateY }, { scale: mountScale }],
         marginBottom: CARD_GAP,
       }}>
       <TouchableOpacity
@@ -310,7 +260,6 @@ function SongsTabComponent({ onOpenSong, scrollOffsetRef }: Props) {
   const isOnline = useNetworkStatus();
   const insets = useSafeAreaInsets();
 
-  // Total header height = safe-area top + collapsible content
   const TOP_PADDING = insets.top;
   const FULL_HEADER_HEIGHT = TOP_PADDING + HEADER_CONTENT_HEIGHT;
 
@@ -330,7 +279,10 @@ function SongsTabComponent({ onOpenSong, scrollOffsetRef }: Props) {
   const pageShake = useRef(new Animated.Value(0)).current;
   const pageInputRef = useRef<TextInput>(null);
 
-  // ── Keyboard lift ────────────────────────────────────────────
+  // ── List fade on filter change ────────────────────────────────
+  const listFade = useRef(new Animated.Value(1)).current;
+
+  // ── Keyboard lift ─────────────────────────────────────────────
   const keyboardLift = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -362,103 +314,11 @@ function SongsTabComponent({ onOpenSong, scrollOffsetRef }: Props) {
     };
   }, [keyboardLift]);
 
-  // ── List ref & scroll restore flag ───────────────────────────
+  // ── List ref & scroll restore ─────────────────────────────────
   const listRef = useRef<FlatList>(null);
   const restoredRef = useRef(false);
 
-  // ── Scroll animation values ───────────────────────────────────
-  const scrollY = useRef(new Animated.Value(0)).current;
-
-  // diffClamp derived from scrollY — clamps the *delta* so the
-  // header only ever travels HEADER_CONTENT_HEIGHT px regardless
-  // of total scroll position.
-  const diffClampScroll = useMemo(
-    () => Animated.diffClamp(scrollY, 0, HEADER_CONTENT_HEIGHT),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
-  );
-
-  const headerTranslateY = useMemo(
-    () =>
-      diffClampScroll.interpolate({
-        inputRange: [0, HEADER_CONTENT_HEIGHT],
-        outputRange: [0, -HEADER_CONTENT_HEIGHT],
-        extrapolate: "clamp",
-      }),
-    [diffClampScroll],
-  );
-
-  const headerOpacity = useMemo(
-    () =>
-      diffClampScroll.interpolate({
-        inputRange: [0, HEADER_CONTENT_HEIGHT * 0.6, HEADER_CONTENT_HEIGHT],
-        outputRange: [1, 0.4, 0],
-        extrapolate: "clamp",
-      }),
-    [diffClampScroll],
-  );
-
-  // ── Scroll-active driver (card edge squish) ───────────────────
-  const scrollActive = useRef(new Animated.Value(0)).current;
-
-  const onScrollBeginDrag = useCallback(() => {
-    Animated.timing(scrollActive, {
-      toValue: 1,
-      duration: 140,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    }).start();
-  }, [scrollActive]);
-
-  const onMomentumScrollEnd = useCallback(() => {
-    Animated.timing(scrollActive, {
-      toValue: 0,
-      duration: 260,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    }).start();
-  }, [scrollActive]);
-
-  const onScrollEndDrag = useCallback(
-    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-      const v = e.nativeEvent.velocity?.y ?? 0;
-      if (Math.abs(v) < 0.05) {
-        Animated.timing(scrollActive, {
-          toValue: 0,
-          duration: 260,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }).start();
-      }
-    },
-    [scrollActive],
-  );
-
-  // ── Edge index tracking ───────────────────────────────────────
-  const [edgeIndices, setEdgeIndices] = useState<{
-    first: number | null;
-    last: number | null;
-  }>({ first: null, last: null });
-
-  const viewabilityConfig = useRef({
-    itemVisiblePercentThreshold: 55,
-  }).current;
-
-  const onViewableItemsChanged = useRef(
-    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
-      if (viewableItems.length === 0) return;
-      const first = viewableItems[0].index;
-      const last = viewableItems[viewableItems.length - 1].index;
-      setEdgeIndices((prev) =>
-        prev.first === first && prev.last === last ? prev : { first, last },
-      );
-    },
-  ).current;
-
-  // ── List fade on filter change ────────────────────────────────
-  const listFade = useRef(new Animated.Value(1)).current;
-
-  // ── Load ─────────────────────────────────────────────────────
+  // ── Load ──────────────────────────────────────────────────────
   const load = useCallback(async () => {
     setError("");
     setLoading(true);
@@ -537,7 +397,7 @@ function SongsTabComponent({ onOpenSong, scrollOffsetRef }: Props) {
     }).start();
   }, [query, singerFilter, listFade]);
 
-  // ── Scroll handler (saves offset + drives scrollY) ────────────
+  // ── Scroll save ───────────────────────────────────────────────
   const handleScroll = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       scrollOffsetRef.current = e.nativeEvent.contentOffset.y;
@@ -545,33 +405,16 @@ function SongsTabComponent({ onOpenSong, scrollOffsetRef }: Props) {
     [scrollOffsetRef],
   );
 
-  const onListScroll = useMemo(
-    () =>
-      Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
-        useNativeDriver: true,
-        listener: handleScroll,
-      }),
-    [scrollY, handleScroll],
-  );
-
   // ── Scroll restore ────────────────────────────────────────────
-  // Wait until the list has mounted and data is ready, then jump
-  // to the saved offset in a single rAF so it doesn't fight the
-  // FlatList's own initial layout pass.
   useEffect(() => {
     if (loading || songs.length === 0 || restoredRef.current) return;
     restoredRef.current = true;
-
     const offset = scrollOffsetRef.current;
     if (offset <= 0) return;
-
     requestAnimationFrame(() => {
-      // Set the animated value first so the header is already in
-      // the right translated position before the list jumps there.
-      scrollY.setValue(offset);
       listRef.current?.scrollToOffset({ offset, animated: false });
     });
-  }, [loading, songs.length, scrollOffsetRef, scrollY]);
+  }, [loading, songs.length, scrollOffsetRef]);
 
   // ── Card gradients ────────────────────────────────────────────
   const cardGradients = useCallback(
@@ -580,9 +423,7 @@ function SongsTabComponent({ onOpenSong, scrollOffsetRef }: Props) {
     [isDark],
   );
 
-  // ── getItemLayout — must match CARD_ROW_HEIGHT exactly ────────
-  // offset = index * CARD_ROW_HEIGHT because each card renders
-  // CARD_HEIGHT tall with CARD_GAP marginBottom baked in.
+  // ── getItemLayout ─────────────────────────────────────────────
   const getItemLayout = useCallback(
     (_: any, index: number) => ({
       length: CARD_HEIGHT,
@@ -663,11 +504,9 @@ function SongsTabComponent({ onOpenSong, scrollOffsetRef }: Props) {
         C={C}
         cardGradients={cardGradients}
         onOpenSong={onOpenSong}
-        isEdge={index === edgeIndices.first || index === edgeIndices.last}
-        scrollActive={scrollActive}
       />
     ),
-    [C, isDark, cardGradients, onOpenSong, edgeIndices, scrollActive],
+    [C, isDark, cardGradients, onOpenSong],
   );
 
   // ── Early returns ─────────────────────────────────────────────
@@ -710,12 +549,11 @@ function SongsTabComponent({ onOpenSong, scrollOffsetRef }: Props) {
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       {/* ── SONG LIST ─────────────────────────────────────────── */}
-      <AnimatedFlatList
+      <FlatList
         ref={listRef}
         data={filtered}
         keyExtractor={(item) => item._id}
         renderItem={renderSongItem}
-        style={{ opacity: listFade }}
         ListEmptyComponent={
           <EmptyState
             icon={<Feather name="music" size={22} color={C.sky} />}
@@ -732,11 +570,8 @@ function SongsTabComponent({ onOpenSong, scrollOffsetRef }: Props) {
         }
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{
-          // Top padding = full header height so first card starts
-          // exactly below the header at rest.
           paddingTop: FULL_HEADER_HEIGHT + Spacing.sm,
           paddingHorizontal: Spacing.lg,
-          // No gap here — gap is handled by marginBottom on each card.
           paddingBottom: 160,
         }}
         removeClippedSubviews={Platform.OS === "android"}
@@ -745,13 +580,8 @@ function SongsTabComponent({ onOpenSong, scrollOffsetRef }: Props) {
         initialNumToRender={10}
         updateCellsBatchingPeriod={50}
         getItemLayout={getItemLayout}
-        onScroll={onListScroll}
+        onScroll={handleScroll}
         scrollEventThrottle={16}
-        onScrollBeginDrag={onScrollBeginDrag}
-        onScrollEndDrag={onScrollEndDrag}
-        onMomentumScrollEnd={onMomentumScrollEnd}
-        onViewableItemsChanged={onViewableItemsChanged}
-        viewabilityConfig={viewabilityConfig}
         decelerationRate="normal"
         overScrollMode="always"
         bounces
@@ -765,9 +595,8 @@ function SongsTabComponent({ onOpenSong, scrollOffsetRef }: Props) {
         }}
       />
 
-      {/* ── COLLAPSING HEADER ─────────────────────────────────── */}
-      {/* Rendered AFTER the list so it sits above it in z-order
-          without needing an explicit zIndex fight. */}
+      {/* ── HEADER: search + singer pills ─────────────────────── */}
+      {/* Rendered after the list so it naturally sits on top. */}
       <Animated.View
         pointerEvents="auto"
         style={[
@@ -775,8 +604,7 @@ function SongsTabComponent({ onOpenSong, scrollOffsetRef }: Props) {
           {
             paddingTop: TOP_PADDING,
             backgroundColor: C.bg,
-            transform: [{ translateY: headerTranslateY }],
-            opacity: headerOpacity,
+            opacity: listFade,
           },
         ]}>
         {/* SEARCH */}
@@ -944,8 +772,6 @@ const hs = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    // No zIndex needed — it's rendered after the list in the tree
-    // so it naturally sits on top.
   },
 });
 
