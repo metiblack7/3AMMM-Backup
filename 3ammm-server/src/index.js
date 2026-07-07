@@ -15,8 +15,8 @@ const app = express();
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const PORT     = process.env.PORT || 5000;
 
-// Connect DB on every cold start (required for Vercel serverless)
-connectDB().catch((err) => {
+// Connect DB — use serverless mode on Vercel, normal mode locally
+connectDB({ serverless: !!process.env.VERCEL }).catch((err) => {
   console.error('DB connection error:', err);
 });
 

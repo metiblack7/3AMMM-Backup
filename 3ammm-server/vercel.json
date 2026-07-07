@@ -1,17 +1,16 @@
 {
   "version": 2,
   "installCommand": "npm install",
-  "buildCommand": "",
+  "builds": [
+    {
+      "src": "src/index.js",
+      "use": "@vercel/node"
+    }
+  ],
   "routes": [
     {
       "src": "/(.*)",
-      "dest": "index.js"
+      "dest": "src/index.js"
     }
-  ],
-  "functions": {
-    "index.js": {
-      "maxDuration": 30,
-      "memory": 1024
-    }
-  }
+  ]
 }
