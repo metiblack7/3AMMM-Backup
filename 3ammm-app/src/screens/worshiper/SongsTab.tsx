@@ -37,6 +37,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 interface Props {
   onOpenSong: (song: Song) => void;
   scrollOffsetRef: MutableRefObject<number>;
+  onSongsLoaded?: (songs: Song[]) => void; // ← exposes songs to parent
 }
 
 type NumberedSong = Song & { pageNumber: number };
@@ -44,10 +45,7 @@ type NumberedSong = Song & { pageNumber: number };
 const STAGGER_CAP = 280;
 const STAGGER_STEP = 45;
 
-// Collapsible header content height (search box + pills).
 const HEADER_CONTENT_HEIGHT = 118;
-
-// Card height — used for getItemLayout.
 const CARD_HEIGHT = 92;
 const CARD_GAP = Spacing.md;
 const CARD_ROW_HEIGHT = CARD_HEIGHT + CARD_GAP;
@@ -56,7 +54,6 @@ function staggerDelay(index: number) {
   return Math.min((index % 10) * STAGGER_STEP, STAGGER_CAP);
 }
 
-// ── Song card — mount stagger only, no scroll-driven animation ──
 const AnimatedSongCard = React.memo(function AnimatedSongCard({
   item,
   index,
@@ -178,7 +175,6 @@ const AnimatedSongCard = React.memo(function AnimatedSongCard({
   );
 });
 
-// ── Pulsing skeleton ──────────────────────────────────────────
 function SongsLoadingSkeleton({
   topPadding,
   bg,
@@ -254,8 +250,11 @@ function SongsLoadingSkeleton({
   );
 }
 
-// ── Main component ────────────────────────────────────────────
-function SongsTabComponent({ onOpenSong, scrollOffsetRef }: Props) {
+function SongsTabComponent({
+  onOpenSong,
+  scrollOffsetRef,
+  onSongsLoaded,
+}: Props) {
   const { t } = useApp();
   const { C, isDark } = useTheme();
   const isOnline = useNetworkStatus();
@@ -264,7 +263,6 @@ function SongsTabComponent({ onOpenSong, scrollOffsetRef }: Props) {
   const TOP_PADDING = insets.top;
   const FULL_HEADER_HEIGHT = TOP_PADDING + HEADER_CONTENT_HEIGHT;
 
-  // ── Data ─────────────────────────────────────────────────────
   const [songs, setSongs] = useState<Song[]>([]);
   const [singers, setSingers] = useState<string[]>(["All"]);
   const [loading, setLoading] = useState(true);
@@ -273,17 +271,13 @@ function SongsTabComponent({ onOpenSong, scrollOffsetRef }: Props) {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
 
-  // ── Page-number search ───────────────────────────────────────
   const [pageInputVisible, setPageInputVisible] = useState(false);
   const [pageQuery, setPageQuery] = useState("");
   const [pageError, setPageError] = useState(false);
   const pageShake = useRef(new Animated.Value(0)).current;
   const pageInputRef = useRef<TextInput>(null);
 
-  // ── List fade on filter change ────────────────────────────────
   const listFade = useRef(new Animated.Value(1)).current;
-
-  // ── Keyboard lift ─────────────────────────────────────────────
   const keyboardLift = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -315,7 +309,6 @@ function SongsTabComponent({ onOpenSong, scrollOffsetRef }: Props) {
     };
   }, [keyboardLift]);
 
-  // ── List ref & scroll restore ─────────────────────────────────
   const listRef = useRef<FlatList>(null);
   const restoredRef = useRef(false);
 
@@ -325,16 +318,15 @@ function SongsTabComponent({ onOpenSong, scrollOffsetRef }: Props) {
     setLoading(true);
     try {
       if (!isOnline) {
-        // Offline: use cached songs only
         const cached = await db.songs.getAll();
         const cachedSingers = await db.songs.getSingers();
         setSongs(cached);
         setSingers(["All", ...cachedSingers]);
+        onSongsLoaded?.(cached); // ← notify parent
         setLoading(false);
         return;
       }
 
-      // Online: try server first, fall back to cache on failure
       try {
         const [songsData, singersData] = await Promise.all([
           api.songs.getAll(),
@@ -342,10 +334,10 @@ function SongsTabComponent({ onOpenSong, scrollOffsetRef }: Props) {
         ]);
         setSongs(songsData);
         setSingers(["All", ...singersData]);
-        // persist for offline use
+        onSongsLoaded?.(songsData); // ← notify parent
         try {
           await db.songs.save(songsData as any);
-        } catch (e) {
+        } catch {
           // ignore local save errors
         }
       } catch (err: any) {
@@ -353,6 +345,7 @@ function SongsTabComponent({ onOpenSong, scrollOffsetRef }: Props) {
         const cachedSingers = await db.songs.getSingers();
         setSongs(cached);
         setSingers(["All", ...cachedSingers]);
+        onSongsLoaded?.(cached); // ← notify parent with cache
         setError(
           err?.message || "Failed to load songs (server). Using cached songs.",
         );
@@ -360,7 +353,7 @@ function SongsTabComponent({ onOpenSong, scrollOffsetRef }: Props) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [onSongsLoaded]);
 
   useEffect(() => {
     load();
@@ -372,13 +365,11 @@ function SongsTabComponent({ onOpenSong, scrollOffsetRef }: Props) {
     setRefreshing(false);
   }, [load]);
 
-  // ── Numbered songs ────────────────────────────────────────────
   const songsWithNumbers = useMemo<NumberedSong[]>(
     () => songs.map((s, i) => ({ ...s, pageNumber: i + 1 })),
     [songs],
   );
 
-  // ── Filter ────────────────────────────────────────────────────
   const performSearch = useCallback(
     (list: NumberedSong[], q: string, singer: string): NumberedSong[] => {
       if (!q && singer === "All") return list;
@@ -423,7 +414,6 @@ function SongsTabComponent({ onOpenSong, scrollOffsetRef }: Props) {
     }).start();
   }, [query, singerFilter, listFade]);
 
-  // ── Scroll save ───────────────────────────────────────────────
   const handleScroll = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       scrollOffsetRef.current = e.nativeEvent.contentOffset.y;
@@ -431,7 +421,6 @@ function SongsTabComponent({ onOpenSong, scrollOffsetRef }: Props) {
     [scrollOffsetRef],
   );
 
-  // ── Scroll restore ────────────────────────────────────────────
   useEffect(() => {
     if (loading || songs.length === 0 || restoredRef.current) return;
     restoredRef.current = true;
@@ -442,14 +431,12 @@ function SongsTabComponent({ onOpenSong, scrollOffsetRef }: Props) {
     });
   }, [loading, songs.length, scrollOffsetRef]);
 
-  // ── Card gradients ────────────────────────────────────────────
   const cardGradients = useCallback(
     (_category: string): [string, string] =>
       isDark ? ["#082f41", "#00121e"] : ["#DFF5FF", "#F7FCFF"],
     [isDark],
   );
 
-  // ── getItemLayout ─────────────────────────────────────────────
   const getItemLayout = useCallback(
     (_: any, index: number) => ({
       length: CARD_HEIGHT,
@@ -459,7 +446,6 @@ function SongsTabComponent({ onOpenSong, scrollOffsetRef }: Props) {
     [],
   );
 
-  // ── Page-number search ────────────────────────────────────────
   const shakeAnimation = useCallback(() => {
     Animated.sequence([
       Animated.timing(pageShake, {
@@ -520,7 +506,6 @@ function SongsTabComponent({ onOpenSong, scrollOffsetRef }: Props) {
     });
   }, []);
 
-  // ── Render card ───────────────────────────────────────────────
   const renderSongItem = useCallback(
     ({ item, index }: { item: NumberedSong; index: number }) => (
       <AnimatedSongCard
@@ -535,7 +520,6 @@ function SongsTabComponent({ onOpenSong, scrollOffsetRef }: Props) {
     [C, isDark, cardGradients, onOpenSong],
   );
 
-  // ── Early returns ─────────────────────────────────────────────
   if (loading) {
     return (
       <SongsLoadingSkeleton
@@ -621,8 +605,7 @@ function SongsTabComponent({ onOpenSong, scrollOffsetRef }: Props) {
         }}
       />
 
-      {/* ── HEADER: search + singer pills ─────────────────────── */}
-      {/* Rendered after the list so it naturally sits on top. */}
+      {/* ── HEADER ────────────────────────────────────────────── */}
       <Animated.View
         pointerEvents="auto"
         style={[
@@ -633,7 +616,6 @@ function SongsTabComponent({ onOpenSong, scrollOffsetRef }: Props) {
             opacity: listFade,
           },
         ]}>
-        {/* SEARCH */}
         <View
           style={{
             paddingHorizontal: Spacing.lg,
@@ -673,7 +655,6 @@ function SongsTabComponent({ onOpenSong, scrollOffsetRef }: Props) {
           </View>
         </View>
 
-        {/* SINGER PILLS */}
         <View style={{ paddingTop: 10, paddingBottom: 6 }}>
           <ScrollView
             horizontal

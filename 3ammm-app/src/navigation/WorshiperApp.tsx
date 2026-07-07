@@ -13,7 +13,6 @@ import { BlurView } from "expo-blur";
 import { FontAwesome5 } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../lib/useTheme";
-import { api } from "../lib/api";
 import HomeTab from "../screens/worshiper/HomeTab";
 import SongsTab from "../screens/worshiper/SongsTab";
 import { SetlistsTab, FavoritesTab } from "../screens/worshiper/OtherTabs";
@@ -39,10 +38,9 @@ export default function WorshiperApp() {
   const { C, isDark } = useTheme();
   const insets = useSafeAreaInsets();
 
+  // ── allSongs is loaded by SongsTab and shared with FavoritesTab
+  // so favorites can show the same page numbers as the songs list.
   const [allSongs, setAllSongs] = useState<Song[]>([]);
-  const [singers, setSingers] = useState<string[]>(["All"]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   const [activeSong, setActiveSong] = useState<Song | null>(null);
   const [activePageNumber, setActivePageNumber] = useState<number>(1);
@@ -55,27 +53,6 @@ export default function WorshiperApp() {
   const tabTranslate = useRef(
     TABS.map((_, i) => new Animated.Value(i === 0 ? 0 : 14)),
   ).current;
-
-  const loadSongs = useCallback(async () => {
-    setError(null);
-    setLoading(true);
-    try {
-      const [songsData, singersData] = await Promise.all([
-        api.songs.getAll(),
-        api.songs.getSingers(),
-      ]);
-      setAllSongs(songsData);
-      setSingers(["All", ...singersData]);
-    } catch (err: any) {
-      setError(err?.message || "Failed to load songs");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadSongs();
-  }, [loadSongs]);
 
   const openSong = useCallback(
     (song: Song) => {
@@ -187,10 +164,12 @@ export default function WorshiperApp() {
               <SongsTab
                 onOpenSong={openSong}
                 scrollOffsetRef={songsScrollOffset}
+                onSongsLoaded={setAllSongs}
               />
             )}
 
             {tab.key === "setlists" && <SetlistsTab onOpenSong={openSong} />}
+
             {tab.key === "favs" && (
               <FavoritesTab
                 onOpenSong={openSong}
@@ -198,11 +177,13 @@ export default function WorshiperApp() {
                 allSongs={allSongs}
               />
             )}
+
             {tab.key === "settings" && <SettingsTab />}
           </Animated.View>
         ))}
       </View>
 
+      {/* ── TAB BAR ───────────────────────────────────────────── */}
       <View
         style={[styles.tabBarOuter, { bottom: tabBarBottom }]}
         pointerEvents="box-none">
@@ -214,7 +195,6 @@ export default function WorshiperApp() {
               end={{ x: 0, y: 1 }}
               style={StyleSheet.absoluteFill}
             />
-
             <View
               style={[
                 StyleSheet.absoluteFill,
@@ -230,19 +210,14 @@ export default function WorshiperApp() {
           <View
             style={[
               StyleSheet.absoluteFill,
-              {
-                borderRadius: 32,
-                overflow: "hidden",
-              },
+              { borderRadius: 32, overflow: "hidden" },
             ]}>
             <BlurView
               intensity={isDark ? 38 : 55}
               tint={isDark ? "dark" : "light"}
-              // Android blur is experimental in Expo and needs this enabled.
               experimentalBlurMethod={
                 Platform.OS === "android" ? "dimezisBlurView" : undefined
               }
-              // Helps keep the Android result closer to iOS.
               blurReductionFactor={4}
               style={StyleSheet.absoluteFill}
             />
@@ -255,7 +230,6 @@ export default function WorshiperApp() {
           <View style={styles.tabBarRow}>
             {TABS.map((tab, index) => {
               const isActive = activeTab === tab.key;
-
               return (
                 <TouchableOpacity
                   key={tab.key}
@@ -292,6 +266,7 @@ export default function WorshiperApp() {
         </View>
       </View>
 
+      {/* ── LYRICS OVERLAY ────────────────────────────────────── */}
       {activeSong && (
         <View style={styles.lyricsOverlay}>
           <LyricsScreen

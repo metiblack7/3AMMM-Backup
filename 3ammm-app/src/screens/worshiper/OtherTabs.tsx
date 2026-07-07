@@ -84,9 +84,7 @@ function FavoriteSongCard({
 
           <View style={ss.songInfo}>
             <Text style={[ss.songTitle, { color: C.text }]}>{item.title}</Text>
-            <Text style={[ss.songMeta, { color: C.text2 }]}>
-              {item.singerName}
-            </Text>
+            <Text style={[ss.songMeta, { color: C.text2 }]}>{item.singerName}</Text>
           </View>
 
           <Feather name="chevron-right" size={18} color={C.text3} />
@@ -97,15 +95,9 @@ function FavoriteSongCard({
             ss.songFooter,
             { borderTopColor: isDark ? C.glassBorder : C.border },
           ]}>
-          <Text style={[ss.songNumber, { color: C.text3 }]}>
-            {item.pageNumber}
-          </Text>
-          <View
-            style={[ss.keyChip, { backgroundColor: C.goldDeep ?? C.skyPale }]}>
-            <Text style={[ss.keyChipText, { color: C.gold ?? C.sky }]}>
-              {" "}
-              {item.key}{" "}
-            </Text>
+          <Text style={[ss.songNumber, { color: C.text3 }]}>{item.pageNumber}</Text>
+          <View style={[ss.keyChip, { backgroundColor: C.goldDeep ?? C.skyPale }]}> 
+            <Text style={[ss.keyChipText, { color: C.gold ?? C.sky }]}> {item.key} </Text>
           </View>
         </View>
       </LinearGradient>
@@ -259,7 +251,11 @@ export function SetlistsTab({ onOpenSong }: SongProps) {
 }
 
 // ── FAVORITES TAB ─────────────────────────────────────────────
-export function FavoritesTab({ onOpenSong, onBackToSongs }: SongProps) {
+export function FavoritesTab({
+  onOpenSong,
+  onBackToSongs,
+  allSongs = [],
+}: SongProps) {
   const { t, profile } = useApp();
   const { C, isDark } = useTheme();
   const [songs, setSongs] = useState<Song[]>([]);
@@ -305,10 +301,18 @@ export function FavoritesTab({ onOpenSong, onBackToSongs }: SongProps) {
 
   if (loading) return <Loader />;
 
-  const numberedSongs: NumberedSong[] = songs.map((song, index) => ({
-    ...song,
-    pageNumber: index + 1,
-  }));
+  // ── Use the global song list order for page numbers ───────────
+  // Match each favorite against allSongs by _id to get the same
+  // page number shown in the Songs tab. Fall back to the favorite's
+  // own position only if it can't be found in the global list
+  // (e.g. song was deleted from server but still cached locally).
+  const numberedSongs: NumberedSong[] = songs.map((song, index) => {
+    const globalIndex = allSongs.findIndex((s) => s._id === song._id);
+    return {
+      ...song,
+      pageNumber: globalIndex !== -1 ? globalIndex + 1 : index + 1,
+    };
+  });
 
   const getItemLayout = (_: any, index: number) => ({
     length: CARD_HEIGHT,
@@ -544,11 +548,7 @@ const ss = StyleSheet.create({
     borderBottomWidth: 1,
   },
   headerTitle: { fontSize: 15, fontWeight: "700", flex: 1 },
-  songCardWrap: {
-    borderRadius: 16,
-    overflow: "hidden",
-    marginBottom: Spacing.md,
-  },
+  songCardWrap: { borderRadius: 16, overflow: "hidden", marginBottom: Spacing.md },
   songCard: {
     borderRadius: 16,
     borderWidth: 0.5,
