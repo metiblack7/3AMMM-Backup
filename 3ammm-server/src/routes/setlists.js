@@ -6,7 +6,7 @@ const { protect, adminOnly } = require('../middleware/auth');
 const router = express.Router();
 
 // GET /api/setlists — all setlists with populated songs
-router.get('/', protect, async (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const setlists = await Setlist.find()
       .populate('songIds')
@@ -18,7 +18,7 @@ router.get('/', protect, async (req, res) => {
 });
 
 // GET /api/setlists/:id
-router.get('/:id', protect, async (req, res) => {
+router.get('/:id', async (req, res) => {
   try {
     const setlist = await Setlist.findById(req.params.id).populate('songIds');
     if (!setlist) return res.status(404).json({ message: 'Setlist not found.' });

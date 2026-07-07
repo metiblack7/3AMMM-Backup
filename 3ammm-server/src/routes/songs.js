@@ -32,7 +32,7 @@ function performSearch(songs, query) {
   });
 }
 
-router.get('/', protect, async (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const { search, singer } = req.query;
     let songs = await Song.find().sort({ title: 1 });
@@ -51,7 +51,7 @@ router.get('/', protect, async (req, res) => {
   }
 });
 
-router.get('/singers', protect, async (req, res) => {
+router.get('/singers', async (req, res) => {
   try {
     const singers = await Song.distinct('singerName');
     res.json(singers.sort());
@@ -60,7 +60,7 @@ router.get('/singers', protect, async (req, res) => {
   }
 });
 
-router.get('/:id', protect, async (req, res) => {
+router.get('/:id', async (req, res) => {
   try {
     const song = await Song.findById(req.params.id);
     if (!song) return res.status(404).json({ message: 'Song not found.' });

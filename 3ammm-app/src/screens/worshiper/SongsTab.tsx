@@ -28,6 +28,7 @@ import { api } from "../../lib/api";
 import { useApp } from "../../lib/AppContext";
 import { useTheme } from "../../lib/useTheme";
 import { useNetworkStatus } from "../../lib/network";
+import { db } from "../../lib/db";
 import { EmptyState } from "../../components/UI";
 import { Spacing } from "../../theme";
 import { Song } from "../LyricsScreen";
@@ -106,7 +107,7 @@ const AnimatedSongCard = React.memo(function AnimatedSongCard({
     ]).start();
   }, [item._id, index, mountOpacity, mountTranslateY, mountScale]);
 
-  const [g1, g2] = cardGradients(item.category);
+  const [g1, g2] = cardGradients(item.category ?? "");
 
   return (
     <Animated.View
@@ -323,14 +324,39 @@ function SongsTabComponent({ onOpenSong, scrollOffsetRef }: Props) {
     setError("");
     setLoading(true);
     try {
-      const [songsData, singersData] = await Promise.all([
-        api.songs.getAll(),
-        api.songs.getSingers(),
-      ]);
-      setSongs(songsData);
-      setSingers(["All", ...singersData]);
-    } catch (err: any) {
-      setError(err.message || "Failed to load songs");
+      if (!isOnline) {
+        // Offline: use cached songs only
+        const cached = await db.songs.getAll();
+        const cachedSingers = await db.songs.getSingers();
+        setSongs(cached);
+        setSingers(["All", ...cachedSingers]);
+        setLoading(false);
+        return;
+      }
+
+      // Online: try server first, fall back to cache on failure
+      try {
+        const [songsData, singersData] = await Promise.all([
+          api.songs.getAll(),
+          api.songs.getSingers(),
+        ]);
+        setSongs(songsData);
+        setSingers(["All", ...singersData]);
+        // persist for offline use
+        try {
+          await db.songs.save(songsData as any);
+        } catch (e) {
+          // ignore local save errors
+        }
+      } catch (err: any) {
+        const cached = await db.songs.getAll();
+        const cachedSingers = await db.songs.getSingers();
+        setSongs(cached);
+        setSingers(["All", ...cachedSingers]);
+        setError(
+          err?.message || "Failed to load songs (server). Using cached songs.",
+        );
+      }
     } finally {
       setLoading(false);
     }

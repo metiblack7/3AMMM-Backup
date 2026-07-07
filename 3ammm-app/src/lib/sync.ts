@@ -1,5 +1,5 @@
 import { db, Song, Setlist } from './db';
-import { api } from './api';
+import { api, getToken } from './api';
 import { getNetworkStatus, subscribeToNetworkStatus } from './network';
 import { SYNC_CONFIG, log, logError } from './env';
 
@@ -21,7 +21,7 @@ let syncState: SyncState = {
 };
 
 let syncListeners: ((state: SyncState) => void)[] = [];
-let syncInterval: NodeJS.Timeout | null = null;
+let syncInterval: ReturnType<typeof setInterval> | null = null;
 
 // ── Listeners ────────────────────────────────────────────────────────
 export function subscribeSyncStatus(callback: (state: SyncState) => void): () => void {
@@ -67,7 +67,8 @@ async function syncFavorites() {
   try {
     log('Syncing favorites...');
     const response = await api.favorites.getIds();
-    const ids: string[] = response.ids || [];
+    // Normalise: server may return a plain string[] or { ids: [...] }
+    const ids: string[] = Array.isArray(response) ? response : (response?.ids ?? []);
     await db.favorites.save(ids);
     await db.sync.setLastSync('favorites', Date.now());
     log('Favorites synced:', ids.length);
@@ -85,6 +86,16 @@ export async function syncAll(force = false) {
 
   if (!getNetworkStatus()) {
     log('Offline - skipping sync');
+    return;
+  }
+
+  // Guest sessions and the pre-login state have no JWT at all — every
+  // one of these endpoints requires auth, so attempting sync here just
+  // produces a burst of 401s across songs/setlists/favorites/singers
+  // in parallel. Skip entirely until there's a real signed-in session.
+  const token = await getToken();
+  if (!token) {
+    log('Skipping sync - no authenticated session');
     return;
   }
 

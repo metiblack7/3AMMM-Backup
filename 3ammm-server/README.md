@@ -82,19 +82,22 @@ Make sure your phone and computer are on the **same WiFi network**.
 
 ---
 
-## Step 4 — Update the app's API URL
+## Step 4 — Set the app's API URL
 
-Open `3ammm-app/src/lib/api.ts` and change:
+Set the app's `EXPO_PUBLIC_API_URL` environment variable so the mobile app knows where to send requests. Examples (put these in `3ammm-app/.env` or export before starting Expo):
 
-```ts
-export const API_URL = 'http://192.168.1.100:5000';
+```env
+# For simulator / web
+EXPO_PUBLIC_API_URL=http://localhost:5000
+
+# Android emulator
+EXPO_PUBLIC_API_URL=http://10.0.2.2:5000
+
+# For a physical device, set your computer's LAN IP (find via `ipconfig` / `ifconfig`)
+EXPO_PUBLIC_API_URL=http://192.168.1.45:5000
 ```
 
-to your actual IP:
-
-```ts
-export const API_URL = 'http://192.168.1.45:5000';  // ← your IP here
-```
+If `EXPO_PUBLIC_API_URL` is not set, the app defaults to a platform-aware development host (localhost or 10.0.2.2). Physical devices require the LAN IP.
 
 ---
 

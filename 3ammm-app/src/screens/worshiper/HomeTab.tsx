@@ -41,15 +41,46 @@ function HomeTabComponent({ onOpenSong, onNavigateTab }: Props) {
 
   const load = useCallback(async () => {
     try {
-      const [songsData, setlistsData, favIds] = await Promise.all([
-        api.songs.getAll(),
-        api.setlists.getAll(),
-        api.favorites.getIds(),
+      // Fetch songs and setlists normally. For favorites count, prefer
+      // local cached favorites for guests/offline; for authenticated
+      // users attempt server, but fall back to local on error.
+      const [songsData, setlistsData] = await Promise.all([
+        api.songs.getAll().catch(async () => {
+          // fallback to cache when server unreachable
+          return await (await import("../../lib/db")).db.songs.getAll();
+        }),
+        api.setlists.getAll().catch(async () => {
+          return await (await import("../../lib/db")).db.setlists.getAll();
+        }),
       ]);
 
       setSongs(songsData);
       setSetlists(setlistsData);
-      setFavCount(favIds.length);
+
+      // favorites count: prefer local cache for guests/offline; otherwise use server
+      const isGuest =
+        !!profile && String(profile._id || "").startsWith("guest_");
+
+      if (isGuest || !profile) {
+        const localFavs = await (
+          await import("../../lib/db")
+        ).db.favorites.getAll();
+        setFavCount(localFavs.length);
+      } else {
+        try {
+          const favIds = await api.favorites.getIds();
+          setFavCount(
+            Array.isArray(favIds)
+              ? favIds.length
+              : (favIds?.ids ?? []).length || 0,
+          );
+        } catch (err) {
+          const localFavs = await (
+            await import("../../lib/db")
+          ).db.favorites.getAll();
+          setFavCount(localFavs.length);
+        }
+      }
     } catch (err) {
       console.error(err);
     }
@@ -114,7 +145,9 @@ function HomeTabComponent({ onOpenSong, onNavigateTab }: Props) {
           end={{ x: 0, y: 1 }}
           style={s.hero}>
           <Text style={s.greet}>{t.greeting}</Text>
-          <Text style={s.name}>{profile?.name?.split(" ")[0] ?? "Saba App"}</Text>
+          <Text style={s.name}>
+            {profile?.name?.split(" ")[0] ?? "Saba App"}
+          </Text>
           <Text style={s.verse}>{t.verse}</Text>
         </LinearGradient>
 

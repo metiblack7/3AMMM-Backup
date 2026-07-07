@@ -26,6 +26,8 @@ import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "../lib/api";
+import { db } from "../lib/db";
+import { publish } from "../lib/pubsub";
 import { useApp } from "../lib/AppContext";
 import { useTheme } from "../lib/useTheme";
 import { Spacing } from "../theme";
@@ -35,9 +37,9 @@ export interface Song {
   _id: string;
   title: string;
   key: string;
-  tempo: string;
+  tempo?: string;
   singerName: string;
-  category: string;
+  category?: string;
   lyrics: { s: string; t: string }[];
 }
 
@@ -196,6 +198,7 @@ export default function LyricsScreen({
     setBoldLyrics,
     t,
   } = useApp();
+  const { profile, signOut } = useApp();
   const { C, isDark } = useTheme();
   const insets = useSafeAreaInsets();
 
@@ -280,12 +283,36 @@ export default function LyricsScreen({
   );
 
   useEffect(() => {
-    if (!isAuthenticated || !song?._id) return;
-    api.favorites
-      .getIds()
-      .then((ids: string[]) => setIsFav(ids.includes(song._id)))
-      .catch(() => {});
-  }, [song?._id, isAuthenticated]);
+    if (!song?._id) return;
+
+    (async () => {
+      try {
+        const isGuest =
+          !!profile && String(profile._id || "").startsWith("guest_");
+        if (isGuest) {
+          const has = await db.favorites.has(song._id);
+          setIsFav(has);
+          return;
+        }
+
+        if (isAuthenticated) {
+          const resp = await api.favorites.getIds().catch(() => []);
+          let idsArr: string[] = [];
+          if (Array.isArray(resp)) idsArr = resp as string[];
+          else if (resp && Array.isArray((resp as any).ids))
+            idsArr = (resp as any).ids;
+          setIsFav(idsArr.includes(song._id));
+          return;
+        }
+
+        // fallback to local store when not authenticated
+        const hasLocal = await db.favorites.has(song._id);
+        setIsFav(hasLocal);
+      } catch (err) {
+        /* ignore */
+      }
+    })();
+  }, [song?._id, isAuthenticated, profile]);
 
   const closeAdjustPanel = useCallback(() => {
     Animated.timing(adjustAnim, {
@@ -381,15 +408,34 @@ export default function LyricsScreen({
   }, [fabOpacity]);
 
   const toggleFav = useCallback(async () => {
-    if (!isAuthenticated || toggling || !song?._id) return;
+    if (toggling || !song?._id) return;
+
+    const isGuest = !!profile && String(profile._id || "").startsWith("guest_");
+
+    // Not signed-in and no guest profile -> prompt sign-in
+    if (!isAuthenticated && !isGuest) {
+      const { Alert } = require("react-native");
+      Alert.alert(
+        t.signInRequired ?? "Sign in required",
+        t.signInToFavorite ?? "Please sign in to save favorites.",
+        [
+          { text: t.cancel ?? "Cancel", style: "cancel" },
+          { text: t.signIn ?? "Sign in", onPress: () => signOut() },
+        ],
+      );
+      return;
+    }
+
     setToggling(true);
     try {
-      const { favorited } = await api.favorites.toggle(song._id);
+      const { favorited } = await (
+        await import("../lib/favoritesService")
+      ).favoritesService.toggle(song._id, profile);
       setIsFav(favorited);
     } finally {
       setToggling(false);
     }
-  }, [isAuthenticated, toggling, song?._id]);
+  }, [isAuthenticated, toggling, song?._id, profile, signOut, t]);
 
   const handleShare = useCallback(async () => {
     if (!song) return;
@@ -662,25 +708,23 @@ export default function LyricsScreen({
               />
             </TouchableOpacity>
 
-            {isAuthenticated && (
-              <TouchableOpacity
-                style={[
-                  s.actionBtn,
-                  isFav && {
-                    backgroundColor: "rgba(251,176,64,0.14)",
-                    borderColor: "rgba(251,176,64,0.30)",
-                  },
-                ]}
-                onPress={toggleFav}
-                disabled={toggling}
-                activeOpacity={0.75}>
-                <Feather
-                  name="heart"
-                  size={17}
-                  color={isFav ? "#fbb040" : iconColor}
-                />
-              </TouchableOpacity>
-            )}
+            <TouchableOpacity
+              style={[
+                s.actionBtn,
+                isFav && {
+                  backgroundColor: "rgba(251,176,64,0.14)",
+                  borderColor: "rgba(251,176,64,0.30)",
+                },
+              ]}
+              onPress={toggleFav}
+              disabled={toggling}
+              activeOpacity={0.75}>
+              <Feather
+                name="heart"
+                size={17}
+                color={isFav ? "#fbb040" : iconColor}
+              />
+            </TouchableOpacity>
 
             <TouchableOpacity
               style={s.actionBtn}

@@ -16,9 +16,12 @@ import { BlurView } from "expo-blur";
 import { Feather } from "@expo/vector-icons";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/AppContext";
+import { db } from "../../lib/db";
+import { subscribe } from "../../lib/pubsub";
 import { Loader, EmptyState } from "../../components/UI";
 import { Spacing, Radius } from "../../theme";
 import { useTheme } from "../../lib/useTheme";
+import { useNetworkStatus } from "../../lib/network";
 import { Song } from "../LyricsScreen";
 
 interface Setlist {
@@ -65,27 +68,23 @@ function GlassContainer({
   style?: object;
   intensity?: number;
 }) {
-  if (Platform.OS === "android") {
-    return (
-      <View
-        style={[
-          styles.blurContainer,
-          {
-            backgroundColor: isDark
-              ? "rgba(2, 18, 30, 0.92)"
-              : "rgba(255, 255, 255, 0.92)",
-          },
-          style,
-        ]}>
-        {children}
-      </View>
-    );
-  }
+  // Render a semi-opaque backdrop so Android shows a consistent frosted look
+  // even when native blur is not available. Attempt to render BlurView on
+  // all platforms (iOS, web, Android) but keep the fallback background.
+  const backdropColor = isDark
+    ? "rgba(2, 18, 30, 0.78)"
+    : "rgba(255, 255, 255, 0.78)";
 
   return (
-    <BlurView intensity={intensity} style={[styles.blurContainer, style]}>
-      {children}
-    </BlurView>
+    <View
+      style={[styles.blurContainer, { backgroundColor: backdropColor }, style]}>
+      <BlurView
+        intensity={intensity}
+        tint={isDark ? "dark" : "light"}
+        style={StyleSheet.absoluteFill}
+      />
+      <View style={StyleSheet.absoluteFill}>{children}</View>
+    </View>
   );
 }
 
@@ -193,12 +192,14 @@ function TabLoadingSkeleton({
 
 // ── SETLISTS TAB ──────────────────────────────────────────────
 function SetlistsTabComponent({ onOpenSong }: SongProps) {
-  const { t } = useApp();
+  const { t, profile } = useApp();
   const { C, isDark } = useTheme();
   const [setlists, setSetlists] = useState<Setlist[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const contentFade = useRef(new Animated.Value(0)).current;
+
+  const isOnline = useNetworkStatus();
 
   const load = useCallback(async () => {
     try {
@@ -254,12 +255,7 @@ function SetlistsTabComponent({ onOpenSong }: SongProps) {
 
   return (
     <Animated.ScrollView
-      style={{
-        flex: 1,
-        backgroundColor: C.bg,
-        paddingTop: TOP_PADDING,
-        opacity: contentFade,
-      }}
+      style={{ flex: 1, backgroundColor: C.bg, opacity: contentFade }}
       showsVerticalScrollIndicator={false}
       decelerationRate="normal"
       overScrollMode="always"
@@ -270,19 +266,14 @@ function SetlistsTabComponent({ onOpenSong }: SongProps) {
           tintColor={C.sky}
         />
       }>
-      <View style={{ height: 8 }} />
-
-      {setlists.length === 0 ? (
-        <EmptyState
-          icon={<Feather name="list" size={24} color={C.sky} />}
-          text="No setlists yet."
-        />
-      ) : (
-        setlists.map((sl, slIndex) => {
-          const songs = sl.songIds || [];
-
-          return (
-            <FadeSlideIn key={sl._id} index={slIndex} style={styles.cardWrap}>
+      {setlists.map((sl, idx) => {
+        return (
+          <FadeSlideIn key={sl._id} index={idx} style={styles.cardWrap}>
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => {
+                /* no-op for now */
+              }}>
               <GlassContainer isDark={isDark} intensity={isDark ? 85 : 60}>
                 <LinearGradient
                   colors={cardGradient}
@@ -293,24 +284,17 @@ function SetlistsTabComponent({ onOpenSong }: SongProps) {
                     {
                       borderColor: isDark ? C.glassBorder : C.border,
                       ...Platform.select({
-                        ios: { shadowColor: C.sky },
+                        ios: { shadowColor: isDark ? C.sky : C.navy },
                         android: {},
                       }),
                     },
                   ]}>
-                  <View
-                    style={[
-                      styles.cardHdr,
-                      {
-                        borderBottomColor: isDark ? C.glassBorder : C.border,
-                      },
-                    ]}>
+                  <View style={styles.cardHdr}>
                     <View
                       style={[
                         styles.dateBadge,
                         {
-                          backgroundColor: C.skyPale,
-                          borderWidth: 1,
+                          backgroundColor: isDark ? C.skyMid : C.skyPale,
                           borderColor: C.skyBorder,
                         },
                       ]}>
@@ -328,22 +312,20 @@ function SetlistsTabComponent({ onOpenSong }: SongProps) {
                     <View
                       style={[
                         styles.songCountBadge,
-                        {
-                          backgroundColor: isDark ? C.skyMid : C.skyPale,
-                        },
+                        { backgroundColor: isDark ? C.skyMid : C.skyPale },
                       ]}>
                       <Text style={[styles.songCountText, { color: C.sky }]}>
-                        {songs.length}
+                        {sl.songIds?.length ?? 0}
                       </Text>
                     </View>
                   </View>
 
-                  {songs.map((song, i) => (
+                  {(sl.songIds || []).map((song, i) => (
                     <TouchableOpacity
                       key={song._id}
                       style={[
                         styles.songRow,
-                        i < songs.length - 1 && [
+                        i < (sl.songIds?.length ?? 0) - 1 && [
                           styles.songBorder,
                           {
                             borderBottomColor: isDark
@@ -383,10 +365,10 @@ function SetlistsTabComponent({ onOpenSong }: SongProps) {
                   ))}
                 </LinearGradient>
               </GlassContainer>
-            </FadeSlideIn>
-          );
-        })
-      )}
+            </TouchableOpacity>
+          </FadeSlideIn>
+        );
+      })}
 
       <View style={{ height: 20 }} />
     </Animated.ScrollView>
@@ -407,25 +389,49 @@ function FavoritesTabComponent({
   onBackToSongs,
   allSongs,
 }: FavoriteProps) {
-  const { t } = useApp();
+  const { t, profile } = useApp();
   const { C, isDark } = useTheme();
   const [songs, setSongs] = useState<FavoriteSong[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const contentFade = useRef(new Animated.Value(0)).current;
+  const isOnline = useNetworkStatus();
 
   const load = useCallback(async () => {
     try {
-      setSongs((await api.favorites.getAll()) as FavoriteSong[]);
+      // Use favoritesService to resolve local-first view and optionally refresh
+      const favSvc = (await import("../../lib/favoritesService"))
+        .favoritesService;
+      const initial = await favSvc.getLocalSongs(allSongs);
+      setSongs(initial);
+
+      const isGuestLocal =
+        !!profile && String(profile._id || "").startsWith("guest_");
+      if (!isGuestLocal && profile && isOnline) {
+        try {
+          const server = await favSvc.refreshFromServer(profile);
+          if (Array.isArray(server) && server.length) setSongs(server as any);
+        } catch (e) {
+          console.warn("[FavoritesTab] refreshFromServer failed", e);
+        }
+      }
     } catch (err) {
       console.error(err);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [profile, allSongs]);
 
   useEffect(() => {
     load();
+  }, [load]);
+
+  // Subscribe to pubsub favorites changes (guest toggles)
+  useEffect(() => {
+    const unsub = subscribe("favorites:changed", () => {
+      load();
+    });
+    return unsub;
   }, [load]);
 
   useEffect(() => {

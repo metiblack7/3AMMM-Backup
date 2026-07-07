@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { API_URL, SYNC_CONFIG } from "./env";
+import { API_URL, SYNC_CONFIG, logError } from "./env";
 
 const TOKEN_KEY = "3ammm_token";
 const TIMEOUT_MS = 25000; // increased from 10s — Vercel cold start can take 15-25s
@@ -16,7 +16,16 @@ export async function clearToken(): Promise<void> {
   await AsyncStorage.removeItem(TOKEN_KEY);
 }
 
-
+// ── Unauthorized hook ───────────────────────────────────────────
+// Lets AppContext react the moment the server rejects the stored
+// token (401), from ANY request — not just the initial /auth/me
+// check. Without this, every screen keeps retrying with the same
+// dead token and 401ing on every endpoint, forever, instead of the
+// app dropping back to the login screen once.
+let onUnauthorized: (() => void) | null = null;
+export function setUnauthorizedHandler(fn: () => void) {
+  onUnauthorized = fn;
+}
 
 // ── Fetch with timeout + better error messages ────────────────
 async function fetchWithTimeout(
@@ -36,13 +45,13 @@ async function fetchWithTimeout(
   } catch (err: any) {
     if (err.name === "AbortError") {
       throw new Error(
-        "Request timed out. The server may be waking up — please try again in a moment.",
+        `Request timed out when reaching ${url}. The server may be waking up — please try again in a moment.`,
       );
     }
     // Network unreachable
-    throw new Error(
-      "Cannot reach the server. Check your internet connection.",
-    );
+    const message = `Cannot reach the server at ${url}. Check your internet connection or start the backend on ${API_URL}`;
+    logError('Network error', url, err.message ?? err);
+    throw new Error(message);
   } finally {
     clearTimeout(timer);
   }
@@ -67,6 +76,9 @@ async function fetchWithRetry(
       const isRetryable =
         err.message.includes("timed out") ||
         err.message.includes("Cannot reach");
+
+      // Log each retry attempt with URL for easier debugging
+      logError('API request failed (attempt)', { url, attempt, message: err.message });
 
       if (!isRetryable || attempt === retries) throw err;
 
@@ -114,11 +126,18 @@ export async function apiFetch(
   }
 
   if (!response.ok) {
-    throw new Error(
-      data?.message ||
-        data?.error ||
-        `Server error (${response.status})`,
-    );
+    const message =
+      data?.message || data?.error || `Server error (${response.status})`;
+
+    // The stored token is dead (expired, wrong secret, revoked, etc).
+    // Clear it immediately and notify the app instead of letting
+    // every other request keep retrying with the same bad token.
+    if (response.status === 401) {
+      await clearToken();
+      onUnauthorized?.();
+    }
+
+    throw new Error(message);
   }
 
   return data;
@@ -144,15 +163,15 @@ export const api = {
       }),
     me: () => apiFetch("/api/auth/me"),
 
-     googleAuth: (
-    accessToken: string,
-    idToken: string,
-    serverAuthCode: string,
-  ) =>
-    apiFetch("/api/auth/google", {
-      method: "POST",
-      body: JSON.stringify({ accessToken, idToken, serverAuthCode }),
-    }),
+    googleAuth: (
+      accessToken: string,
+      idToken: string,
+      serverAuthCode: string,
+    ) =>
+      apiFetch("/api/auth/google", {
+        method: "POST",
+        body: JSON.stringify({ accessToken, idToken, serverAuthCode }),
+      }),
   },
 
   songs: {
@@ -199,6 +218,13 @@ export const api = {
     getIds: () => apiFetch("/api/favorites/ids"),
     toggle: (songId: string) =>
       apiFetch(`/api/favorites/${songId}`, { method: "POST" }),
+    // Batch-merge favorites: send an array of song IDs to add to the
+    // user's favorites. Server will ignore already-existing entries.
+    merge: (songIds: string[]) =>
+      apiFetch(`/api/favorites/merge`, {
+        method: "POST",
+        body: JSON.stringify({ songIds }),
+      }),
   },
 
   notifications: {
@@ -224,8 +250,8 @@ export const api = {
   },
 
   googleAuth: (accessToken: string, idToken: string, serverAuthCode: string) =>
-  apiFetch("/api/auth/google", {
-    method: "POST",
-    body: JSON.stringify({ accessToken, idToken, serverAuthCode }),
-  }),
+    apiFetch("/api/auth/google", {
+      method: "POST",
+      body: JSON.stringify({ accessToken, idToken, serverAuthCode }),
+    }),
 };

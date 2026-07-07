@@ -15,11 +15,6 @@ const app = express();
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const PORT     = process.env.PORT || 5000;
 
-// Connect DB — use serverless mode on Vercel, normal mode locally
-connectDB({ serverless: !!process.env.VERCEL }).catch((err) => {
-  console.error('DB connection error:', err);
-});
-
 app.use(cors({
   origin: true,
   credentials: true,
@@ -37,6 +32,20 @@ if (NODE_ENV === 'development') {
     next();
   });
 }
+
+// ── DB middleware — runs before every request on Vercel ────────
+// On serverless every cold start needs a fresh connection check.
+// The cached global ensures we reuse existing connections instead
+// of opening a new one on every request.
+app.use(async (req, res, next) => {
+  try {
+    await connectDB({ serverless: true });
+    next();
+  } catch (err) {
+    console.error('DB connection failed:', err.message);
+    res.status(500).json({ message: 'Database connection failed.' });
+  }
+});
 
 app.use('/api/auth',          authRoutes);
 app.use('/api/songs',         songRoutes);
@@ -59,6 +68,7 @@ app.get('/health', (_req, res) => res.json({
   status: 'ok',
   app: '3AMMM API',
   environment: NODE_ENV,
+  database: require('mongoose').connection.readyState === 1 ? 'connected' : 'disconnected',
   timestamp: new Date().toISOString(),
 }));
 
@@ -72,9 +82,9 @@ app.use((err, _req, res, _next) => {
   });
 });
 
-// Local dev only
+// ── Local dev only ─────────────────────────────────────────────
 if (require.main === module) {
-  connectDB().then(() => {
+  connectDB({ serverless: false }).then(() => {
     app.listen(PORT, () => {
       console.log(`
 🚀 3AMMM API Server Started

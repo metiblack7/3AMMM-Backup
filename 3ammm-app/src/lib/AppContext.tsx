@@ -18,7 +18,14 @@ import {
 } from "react-native";
 import { BlurView } from "expo-blur";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { api, saveToken, getToken, clearToken } from "./api";
+import {
+  api,
+  saveToken,
+  getToken,
+  clearToken,
+  setUnauthorizedHandler,
+} from "./api";
+import { db } from "./db";
 import {
   useGoogleAuth,
   fetchGoogleUserInfo,
@@ -29,6 +36,7 @@ import { useNetworkStatus } from "./network";
 import translations, { LangKey } from "./i18n";
 import { DarkColors, LightColors } from "../theme";
 import { registerForPushNotificationsOnSignUp } from "./notifications";
+import { favoritesService } from "./favoritesService";
 
 export type ThemeColors = typeof DarkColors;
 
@@ -295,17 +303,24 @@ export function AppProvider({ children }: AppProviderProps) {
   const darkMode = theme === "dark";
 
   // ── Google auth hook (must be called at top level) ────────────
-  // useAuthRequest sets up the OAuth flow. promptAsync() opens the
-  // browser/sheet. We watch `googleResponse` in a useEffect to
-  // complete the sign-in once the user returns.
   const { request, response: googleResponse, promptAsync } = useGoogleAuth();
 
-  // Resolve / reject ref so the async signInWithGoogle() promise
-  // can be settled from inside the useEffect below.
   const googlePromiseRef = useRef<{
     resolve: () => void;
     reject: (err: Error) => void;
   } | null>(null);
+
+  // ── React to the server rejecting our token from ANY request ──
+  // Registered once. Fixes the bug where a 401 from songs/setlists/
+  // favorites/etc just got logged and the stale token + profile
+  // stayed in AsyncStorage, causing every subsequent request to
+  // retry with the same dead token and 401 again, forever.
+  useEffect(() => {
+    setUnauthorizedHandler(() => {
+      setProfile(null);
+      AsyncStorage.removeItem(PROFILE_KEY).catch(() => {});
+    });
+  }, []);
 
   // ── Handle Google auth response ───────────────────────────────
   useEffect(() => {
@@ -316,12 +331,11 @@ export function AppProvider({ children }: AppProviderProps) {
 
     (async () => {
       try {
-        // User cancelled or dismissed
         if (
           googleResponse.type === "cancel" ||
           googleResponse.type === "dismiss"
         ) {
-          settle?.resolve(); // treat cancel as a no-op, not an error
+          settle?.resolve();
           return;
         }
 
@@ -334,10 +348,8 @@ export function AppProvider({ children }: AppProviderProps) {
           throw new Error("No access token returned from Google.");
         }
 
-        // Fetch profile from Google
         const googleUser = await fetchGoogleUserInfo(accessToken);
 
-        // Exchange with your backend
         const { token, user } = await api.auth.googleAuth(
           accessToken,
           googleUser.id,
@@ -348,6 +360,16 @@ export function AppProvider({ children }: AppProviderProps) {
         setProfile(user);
         await registerForPushNotificationsOnSignUp(user.name).catch(() => {});
         await AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(user));
+
+        // Merge guest local favorites into the authenticated account
+        try {
+          await favoritesService.mergeLocalOnSignIn(user).catch(() => {});
+        } catch (err) {
+          console.warn(
+            "Failed to merge local favorites after Google sign-in:",
+            err,
+          );
+        }
 
         settle?.resolve();
       } catch (err: any) {
@@ -382,7 +404,17 @@ export function AppProvider({ children }: AppProviderProps) {
               await AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(user));
             }
           } catch (err) {
+            // Token is invalid/expired (401) or the request otherwise
+            // failed. Clear the stale session instead of continuing to
+            // show a profile the server no longer accepts — this is
+            // what previously caused every screen to keep retrying
+            // with a dead token and 401ing repeatedly.
             console.error("Failed to fetch fresh profile:", err);
+            await clearToken();
+            if (mounted) {
+              setProfile(null);
+              await AsyncStorage.removeItem(PROFILE_KEY);
+            }
           }
         }
 
@@ -426,6 +458,12 @@ export function AppProvider({ children }: AppProviderProps) {
       await saveToken(token);
       setProfile(user);
       await AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(user));
+      // Merge guest local favorites into the authenticated account
+      try {
+        await favoritesService.mergeLocalOnSignIn(user).catch(() => {});
+      } catch (err) {
+        console.warn("Failed to merge local favorites after signIn:", err);
+      }
     } catch (err: any) {
       setAuthError(err.message || "Sign in failed");
       throw err;
@@ -450,16 +488,18 @@ export function AppProvider({ children }: AppProviderProps) {
       setProfile(user);
       await registerForPushNotificationsOnSignUp(user.name).catch(() => {});
       await AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(user));
+      // Merge guest local favorites into the new account
+      try {
+        await favoritesService.mergeLocalOnSignIn(user).catch(() => {});
+      } catch (err) {
+        console.warn("Failed to merge local favorites after signUp:", err);
+      }
     } catch (err: any) {
       setAuthError(err.message || "Sign up failed");
       throw err;
     }
   }
 
-  // signInWithGoogle just triggers the native sheet and returns a
-  // promise that resolves/rejects once the useEffect above handles
-  // the OAuth response. This keeps the async interface identical to
-  // before so no changes are needed in LoginScreen.
   async function signInWithGoogle() {
     setAuthError("");
 

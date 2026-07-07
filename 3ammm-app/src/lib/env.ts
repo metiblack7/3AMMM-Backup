@@ -6,13 +6,25 @@
 export type Environment = 'development' | 'production';
 
 const ENV: Environment = __DEV__ ? 'development' : 'production';
+// Platform-aware default API host for development:
+// - web -> localhost (typical for `npm start` with server on same machine)
+// - android emulator -> 10.0.2.2 (Android emulator host loopback)
+// - ios simulator / other -> localhost
+import { Platform } from 'react-native';
+
+const platformDefaultDevHost = (() => {
+  if (Platform.OS === 'web') return 'http://localhost:5000';
+  if (Platform.OS === 'android') return 'http://10.0.2.2:5000';
+  // iOS simulator and other native platforms can usually reach host via localhost
+  return 'http://localhost:5000';
+})();
 
 // ── API Configuration ────────────────────────────────────────────────
 // In development: use local network IP
 // In production: use your server's public IP/domain
 
 const API_URLS = {
-  development: process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.4:5000',
+  development: process.env.EXPO_PUBLIC_API_URL || platformDefaultDevHost,
   production: process.env.EXPO_PUBLIC_API_URL || 'https://sabaserver.vercel.app',
 } as const;
 
@@ -27,6 +39,19 @@ export const FEATURES = {
   AUTO_SYNC: true,
   DEBUG_LOGS: __DEV__,
 };
+
+// Dev-time notice about API URL — run after FEATURES is defined so `log()` can use FEATURES.DEBUG_LOGS
+if (__DEV__ && !process.env.EXPO_PUBLIC_API_URL) {
+  if (API_URL.includes('localhost') || API_URL.includes('10.0.2.2')) {
+    log(
+      'Development API URL not set via EXPO_PUBLIC_API_URL — using',
+      API_URL,
+      '\nNote: If you run the app on a physical device, set EXPO_PUBLIC_API_URL to your computer LAN IP so the device can reach the backend.',
+    );
+  } else {
+    log('Using EXPO_PUBLIC_API_URL =', API_URL);
+  }
+}
 
 // ── Sync Configuration ───────────────────────────────────────────────
 export const SYNC_CONFIG = {
