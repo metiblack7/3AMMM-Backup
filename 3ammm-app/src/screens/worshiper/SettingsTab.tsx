@@ -22,6 +22,7 @@ import { apiFetch } from "../../lib/api";
 import { Spacing, Radius } from "../../theme";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+
 // ── TOGGLE ───────────────────────────────────────────────────
 interface ToggleProps {
   value: boolean;
@@ -303,6 +304,8 @@ export function SettingsTab() {
     fontWeight: "500",
     color: C.text,
   };
+
+  const { appFontScale, setAppFontScale } = useApp();
 
   return (
     <ScrollView
@@ -655,6 +658,47 @@ export function SettingsTab() {
             )}
           </React.Fragment>
         ))}
+      </View>
+
+      {/* ── APP FONT SIZE (Task 5) ──────────────── */}
+      <Text style={sectionTitle}>App Font Size</Text>
+      <View style={card}>
+        <View style={s.pillRow}>
+          {(["small", "medium", "large"] as const).map((scale) => {
+            const active = appFontScale === scale;
+            const label =
+              scale === "small"
+                ? "Small"
+                : scale === "medium"
+                  ? "Medium"
+                  : "Large";
+            return (
+              <TouchableOpacity
+                key={scale}
+                style={[
+                  s.pill,
+                  { backgroundColor: C.surface, borderColor: C.border },
+                  active && { backgroundColor: C.sky, borderColor: C.sky },
+                ]}
+                onPress={() => setAppFontScale(scale)}
+                activeOpacity={0.75}>
+                <Text
+                  style={[
+                    s.pillText,
+                    { color: C.text2 },
+                    active && { color: C.bg, fontWeight: "700" },
+                  ]}>
+                  {label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+        <Text
+          style={[{ color: C.text3, fontSize: 12, marginBottom: Spacing.sm }]}>
+          Controls text size across the whole app (not lyrics — use the slider
+          above for lyrics).
+        </Text>
       </View>
 
       {/* ── APP UPDATES ─────────────────────────── */}

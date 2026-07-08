@@ -12,30 +12,23 @@ import {
   Image,
   Platform,
   StyleSheet,
-  Text,
   useWindowDimensions,
   View,
 } from "react-native";
 import { BlurView } from "expo-blur";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import {
-  api,
-  saveToken,
-  getToken,
-  clearToken,
-  setUnauthorizedHandler,
-} from "./api";
-import { db } from "./db";
+import { api, saveToken, getToken, clearToken } from "./api";
 import {
   useGoogleAuth,
   fetchGoogleUserInfo,
   getAccessTokenFromResponse,
 } from "./googleAuth";
+import { startAutoSync, syncAll } from "./sync";
 import { useNetworkStatus } from "./network";
 import translations, { LangKey } from "./i18n";
 import { DarkColors, LightColors } from "../theme";
 import { registerForPushNotificationsOnSignUp } from "./notifications";
-import { favoritesService } from "./favoritesService";
+import * as Notifications from "expo-notifications";
 
 export type ThemeColors = typeof DarkColors;
 
@@ -49,6 +42,16 @@ export interface Profile {
 
 const PROFILE_KEY = "3ammm_profile";
 const SPLASH_HOLD_MS = 2500;
+const GUEST_SESSION_KEY = "guest_session_active";
+const WELCOME_NOTIF_KEY = "welcome_notif_sent";
+
+// ── App font scale ────────────────────────────────────────────
+export type AppFontScale = "small" | "medium" | "large";
+const FONT_SCALE_MAP: Record<AppFontScale, number> = {
+  small: 0.85,
+  medium: 1.0,
+  large: 1.18,
+};
 
 export interface AppContextType {
   profile: Profile | null;
@@ -81,6 +84,10 @@ export interface AppContextType {
   toggleTheme: () => Promise<void>;
   C: ThemeColors;
   darkMode: boolean;
+  // App-wide font scale (separate from lyrics font size)
+  appFontScale: AppFontScale;
+  setAppFontScale: (scale: AppFontScale) => Promise<void>;
+  fs: (base: number) => number;
 }
 
 const AppContext = createContext<AppContextType | null>(null);
@@ -89,7 +96,7 @@ interface AppProviderProps {
   children?: ReactNode;
 }
 
-// ── Splash overlay (unchanged) ────────────────────────────────
+// ── Splash overlay ────────────────────────────────────────────
 function SplashOverlay({
   loading,
   onExitComplete,
@@ -283,6 +290,34 @@ function SplashOverlay({
   );
 }
 
+// ── Welcome push notification (Task 6) ───────────────────────
+async function maybeSendWelcomeNotification(lang: LangKey) {
+  try {
+    const already = await AsyncStorage.getItem(WELCOME_NOTIF_KEY);
+    if (already === "true") return;
+
+    const isEn = lang !== "am";
+    const title = isEn
+      ? "Welcome to Saba App 🎵"
+      : "እንኳን ወደ ሳባ ወላይትኛ መዝሙሮች በደህና መጡ! 🎵";
+    const body = isEn ? "Enjoy your worship time!" : "መልካም የአምልኮ ጊዜ!";
+
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title,
+        body,
+        sound: "default",
+        data: { type: "welcome" },
+      },
+      trigger: null, // fire immediately
+    });
+
+    await AsyncStorage.setItem(WELCOME_NOTIF_KEY, "true");
+  } catch (err) {
+    console.error("Welcome notification error:", err);
+  }
+}
+
 // ── AppProvider ───────────────────────────────────────────────
 export function AppProvider({ children }: AppProviderProps) {
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -294,6 +329,7 @@ export function AppProvider({ children }: AppProviderProps) {
   const [boldLyrics, setBoldLyrics] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">("dark");
   const [showSplash, setShowSplash] = useState(true);
+  const [appFontScale, setAppFontScaleState] = useState<AppFontScale>("medium");
 
   const isOnline = useNetworkStatus();
 
@@ -301,27 +337,17 @@ export function AppProvider({ children }: AppProviderProps) {
   const C = theme === "dark" ? DarkColors : LightColors;
   const darkMode = theme === "dark";
 
-  // ── Google auth hook (must be called at top level) ────────────
-  const { request, response: googleResponse, promptAsync } = useGoogleAuth();
+  // fs() helper — multiplies a base size by the active font scale
+  const fs = (base: number) => base * FONT_SCALE_MAP[appFontScale];
 
+  // ── Google auth hook ──────────────────────────────────────
+  const { request, response: googleResponse, promptAsync } = useGoogleAuth();
   const googlePromiseRef = useRef<{
     resolve: () => void;
     reject: (err: Error) => void;
   } | null>(null);
 
-  // ── React to the server rejecting our token from ANY request ──
-  // Registered once. Fixes the bug where a 401 from songs/setlists/
-  // favorites/etc just got logged and the stale token + profile
-  // stayed in AsyncStorage, causing every subsequent request to
-  // retry with the same dead token and 401 again, forever.
-  useEffect(() => {
-    setUnauthorizedHandler(() => {
-      setProfile(null);
-      AsyncStorage.removeItem(PROFILE_KEY).catch(() => {});
-    });
-  }, []);
-
-  // ── Handle Google auth response ───────────────────────────────
+  // ── Handle Google auth response ───────────────────────────
   useEffect(() => {
     if (!googleResponse) return;
 
@@ -358,18 +384,7 @@ export function AppProvider({ children }: AppProviderProps) {
         await saveToken(token);
         setProfile(user);
         await registerForPushNotificationsOnSignUp(user.name).catch(() => {});
-        await preloadSongs();
         await AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(user));
-
-        // Merge guest local favorites into the authenticated account
-        try {
-          await favoritesService.mergeLocalOnSignIn(user).catch(() => {});
-        } catch (err) {
-          console.warn(
-            "Failed to merge local favorites after Google sign-in:",
-            err,
-          );
-        }
 
         settle?.resolve();
       } catch (err: any) {
@@ -380,13 +395,29 @@ export function AppProvider({ children }: AppProviderProps) {
     })();
   }, [googleResponse]);
 
-  // ── App initialisation ────────────────────────────────────────
+  // ── App initialisation ────────────────────────────────────
   useEffect(() => {
     let mounted = true;
 
     (async () => {
       try {
+        startAutoSync();
+
         const token = await getToken();
+
+        // ── Task 1: Restore guest session ─────────────────
+        const guestActive = await AsyncStorage.getItem(GUEST_SESSION_KEY);
+        if (!token && guestActive === "true") {
+          const guestProfile: Profile = {
+            _id: "guest_persistent",
+            name: "Guest User",
+            singerName: "Guest",
+            role: "worshiper",
+            email: "guest@saba.local",
+          };
+          if (mounted) setProfile(guestProfile);
+        }
+
         if (token) {
           const savedProfile = await AsyncStorage.getItem(PROFILE_KEY);
           if (savedProfile && mounted) {
@@ -396,35 +427,40 @@ export function AppProvider({ children }: AppProviderProps) {
 
         if (token) {
           try {
-            await preloadSongs();
             const { user } = await api.auth.me();
             if (mounted) {
               setProfile(user);
               await AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(user));
             }
-          } catch (err) {
-            // Token is invalid/expired (401) or the request otherwise
-            // failed. Clear the stale session instead of continuing to
-            // show a profile the server no longer accepts — this is
-            // what previously caused every screen to keep retrying
-            // with a dead token and 401ing repeatedly.
-            console.error("Failed to fetch fresh profile:", err);
-            await clearToken();
-            if (mounted) {
-              setProfile(null);
+          } catch (err: any) {
+            const message: string = err?.message || "";
+            if (
+              message.includes("Invalid or expired token") ||
+              message.includes("Unauthorized") ||
+              message.includes("jwt")
+            ) {
+              await clearToken();
               await AsyncStorage.removeItem(PROFILE_KEY);
+              if (mounted) setProfile(null);
             }
           }
         }
 
-        const [savedFS, savedLS, savedBL, savedTheme, savedLang] =
-          await Promise.all([
-            AsyncStorage.getItem("pref_font_size"),
-            AsyncStorage.getItem("pref_line_spacing"),
-            AsyncStorage.getItem("pref_bold_lyrics"),
-            AsyncStorage.getItem("pref_theme"),
-            AsyncStorage.getItem("pref_lang"),
-          ]);
+        const [
+          savedFS,
+          savedLS,
+          savedBL,
+          savedTheme,
+          savedLang,
+          savedFontScale,
+        ] = await Promise.all([
+          AsyncStorage.getItem("pref_font_size"),
+          AsyncStorage.getItem("pref_line_spacing"),
+          AsyncStorage.getItem("pref_bold_lyrics"),
+          AsyncStorage.getItem("pref_theme"),
+          AsyncStorage.getItem("pref_lang"),
+          AsyncStorage.getItem("pref_app_font_scale"),
+        ]);
 
         if (mounted) {
           if (savedFS) setFontSize(parseFloat(savedFS));
@@ -432,6 +468,14 @@ export function AppProvider({ children }: AppProviderProps) {
           if (savedBL) setBoldLyrics(savedBL === "true");
           if (savedTheme) setTheme(savedTheme as "light" | "dark");
           if (savedLang) setLang(savedLang as LangKey);
+          if (savedFontScale)
+            setAppFontScaleState(savedFontScale as AppFontScale);
+        }
+
+        if (isOnline) {
+          syncAll(true).catch((err) =>
+            console.error("Initial sync failed:", err),
+          );
         }
       } catch (err) {
         console.error("Initialization error:", err);
@@ -446,16 +490,7 @@ export function AppProvider({ children }: AppProviderProps) {
     };
   }, [isOnline]);
 
-  // ── Auth functions ────────────────────────────────────────────
-  async function preloadSongs() {
-    try {
-      const songs = await api.songs.getAll();
-      await db.songs.save(songs as any);
-    } catch (err) {
-      console.warn("Failed to preload songs:", err);
-    }
-  }
-
+  // ── Auth functions ────────────────────────────────────────
   async function signIn(email: string, password: string) {
     setAuthError("");
     try {
@@ -463,13 +498,6 @@ export function AppProvider({ children }: AppProviderProps) {
       await saveToken(token);
       setProfile(user);
       await AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(user));
-      await preloadSongs();
-      // Merge guest local favorites into the authenticated account
-      try {
-        await favoritesService.mergeLocalOnSignIn(user).catch(() => {});
-      } catch (err) {
-        console.warn("Failed to merge local favorites after signIn:", err);
-      }
     } catch (err: any) {
       setAuthError(err.message || "Sign in failed");
       throw err;
@@ -493,14 +521,7 @@ export function AppProvider({ children }: AppProviderProps) {
       await saveToken(token);
       setProfile(user);
       await registerForPushNotificationsOnSignUp(user.name).catch(() => {});
-      await preloadSongs();
       await AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(user));
-      // Merge guest local favorites into the new account
-      try {
-        await favoritesService.mergeLocalOnSignIn(user).catch(() => {});
-      } catch (err) {
-        console.warn("Failed to merge local favorites after signUp:", err);
-      }
     } catch (err: any) {
       setAuthError(err.message || "Sign up failed");
       throw err;
@@ -527,6 +548,7 @@ export function AppProvider({ children }: AppProviderProps) {
     setAuthError("");
     try {
       await clearToken();
+
       const guestProfile: Profile = {
         _id: "guest_" + Date.now(),
         name: "Guest User",
@@ -536,6 +558,14 @@ export function AppProvider({ children }: AppProviderProps) {
       };
       setProfile(guestProfile);
       await AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(guestProfile));
+
+      // ── Task 1: Persist guest session ─────────────────────
+      await AsyncStorage.setItem(GUEST_SESSION_KEY, "true");
+
+      // ── Task 6: Welcome notification ──────────────────────
+      const currentLang =
+        ((await AsyncStorage.getItem("pref_lang")) as LangKey) ?? lang;
+      await maybeSendWelcomeNotification(currentLang);
     } catch (err: any) {
       setAuthError(err.message || "Guest login failed");
       throw err;
@@ -546,14 +576,14 @@ export function AppProvider({ children }: AppProviderProps) {
     await clearToken();
     setProfile(null);
     await AsyncStorage.removeItem(PROFILE_KEY);
+    // ── Task 1: Clear guest session so login screen shows ──
+    await AsyncStorage.removeItem(GUEST_SESSION_KEY);
   }
 
   function toggleLang() {
-    setLang((prev: LangKey) => {
-      const next = prev === "en" ? "am" : "en";
-      AsyncStorage.setItem("pref_lang", next).catch(() => {});
-      return next;
-    });
+    const next: LangKey = lang === "en" ? "am" : "en";
+    setLang(next);
+    AsyncStorage.setItem("pref_lang", next).catch(() => {});
   }
 
   async function handleSetFontSize(size: number) {
@@ -588,6 +618,12 @@ export function AppProvider({ children }: AppProviderProps) {
     await AsyncStorage.setItem("pref_bold_lyrics", newValue.toString());
   }
 
+  // ── Task 5: App font scale ────────────────────────────────
+  async function handleSetAppFontScale(scale: AppFontScale) {
+    setAppFontScaleState(scale);
+    await AsyncStorage.setItem("pref_app_font_scale", scale);
+  }
+
   return (
     <AppContext.Provider
       value={{
@@ -616,6 +652,9 @@ export function AppProvider({ children }: AppProviderProps) {
         toggleTheme: handleToggleTheme,
         C,
         darkMode,
+        appFontScale,
+        setAppFontScale: handleSetAppFontScale,
+        fs,
       }}>
       {children}
 
