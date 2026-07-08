@@ -147,7 +147,7 @@ const AnimatedSongCard = React.memo(function AnimatedSongCard({
               <Text style={[ss.songTitle, { color: C.text }]}>
                 {item.title}
               </Text>
-              <Text style={[ss.songMeta, { color: C.text2 }]}>
+              <Text style={[ss.songMeta, { color: C.text2, flexShrink: 1 }]}>
                 {item.singerName}
               </Text>
             </View>
@@ -270,6 +270,9 @@ function SongsTabComponent({
   const [singerFilter, setSingerFilter] = useState("All");
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
+  const [showJumpButton, setShowJumpButton] = useState(false);
+  const [jumpDirection, setJumpDirection] = useState<"up" | "down">("up");
+  const jumpHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [pageInputVisible, setPageInputVisible] = useState(false);
   const [pageQuery, setPageQuery] = useState("");
@@ -313,47 +316,51 @@ function SongsTabComponent({
   const restoredRef = useRef(false);
 
   // ── Load ──────────────────────────────────────────────────────
-  const load = useCallback(async () => {
-    setError("");
-    setLoading(true);
-    try {
-      if (!isOnline) {
-        const cached = await db.songs.getAll();
-        const cachedSingers = await db.songs.getSingers();
-        setSongs(cached);
-        setSingers(["All", ...cachedSingers]);
-        onSongsLoaded?.(cached); // ← notify parent
-        setLoading(false);
-        return;
-      }
-
+  const load = useCallback(
+    async (force = false) => {
+      setError("");
+      setLoading(true);
       try {
-        const [songsData, singersData] = await Promise.all([
-          api.songs.getAll(),
-          api.songs.getSingers(),
-        ]);
-        setSongs(songsData);
-        setSingers(["All", ...singersData]);
-        onSongsLoaded?.(songsData); // ← notify parent
-        try {
-          await db.songs.save(songsData as any);
-        } catch {
-          // ignore local save errors
-        }
-      } catch (err: any) {
         const cached = await db.songs.getAll();
         const cachedSingers = await db.songs.getSingers();
-        setSongs(cached);
-        setSingers(["All", ...cachedSingers]);
-        onSongsLoaded?.(cached); // ← notify parent with cache
-        setError(
-          err?.message || "Failed to load songs (server). Using cached songs.",
-        );
+
+        if (cached.length > 0) {
+          setSongs(cached);
+          setSingers(["All", ...cachedSingers]);
+          onSongsLoaded?.(cached);
+        }
+
+        if (!isOnline) {
+          setLoading(false);
+          return;
+        }
+
+        if (force || cached.length === 0) {
+          try {
+            const [songsData, singersData] = await Promise.all([
+              api.songs.getAll(),
+              api.songs.getSingers(),
+            ]);
+            setSongs(songsData);
+            setSingers(["All", ...singersData]);
+            onSongsLoaded?.(songsData);
+            try {
+              await db.songs.save(songsData as any);
+            } catch {
+              // ignore local save errors
+            }
+          } catch (err: any) {
+            setError(
+              err?.message || "Failed to refresh songs. Using cached songs.",
+            );
+          }
+        }
+      } finally {
+        setLoading(false);
       }
-    } finally {
-      setLoading(false);
-    }
-  }, [onSongsLoaded]);
+    },
+    [isOnline, onSongsLoaded],
+  );
 
   useEffect(() => {
     load();
@@ -361,7 +368,7 @@ function SongsTabComponent({
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await load();
+    await load(true);
     setRefreshing(false);
   }, [load]);
 
@@ -414,11 +421,26 @@ function SongsTabComponent({
     }).start();
   }, [query, singerFilter, listFade]);
 
+  const clearJumpHideTimer = useCallback(() => {
+    if (jumpHideTimer.current) {
+      clearTimeout(jumpHideTimer.current);
+      jumpHideTimer.current = null;
+    }
+  }, []);
+
   const handleScroll = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       scrollOffsetRef.current = e.nativeEvent.contentOffset.y;
+      const velocity = e.nativeEvent.velocity?.y ?? 0;
+      const nextDirection = velocity > 0.5 ? "down" : "up";
+      setJumpDirection(nextDirection);
+      setShowJumpButton(true);
+      clearJumpHideTimer();
+      jumpHideTimer.current = setTimeout(() => {
+        setShowJumpButton(false);
+      }, 300);
     },
-    [scrollOffsetRef],
+    [scrollOffsetRef, clearJumpHideTimer],
   );
 
   useEffect(() => {
@@ -445,6 +467,17 @@ function SongsTabComponent({
     }),
     [],
   );
+
+  const jumpToListStart = useCallback(() => {
+    listRef.current?.scrollToIndex({ index: 0, animated: false });
+  }, []);
+
+  const jumpToListEnd = useCallback(() => {
+    listRef.current?.scrollToIndex({
+      index: filtered.length - 1,
+      animated: false,
+    });
+  }, [filtered.length]);
 
   const shakeAnimation = useCallback(() => {
     Animated.sequence([
@@ -549,7 +582,7 @@ function SongsTabComponent({
         <Text style={[es.errorMsg, { color: C.danger }]}>{error}</Text>
         <TouchableOpacity
           style={[es.retryBtn, { backgroundColor: C.sky }]}
-          onPress={load}>
+          onPress={() => load(true)}>
           <Text style={[es.retryText, { color: C.bg }]}>Tap to retry</Text>
         </TouchableOpacity>
       </View>
@@ -584,7 +617,7 @@ function SongsTabComponent({
           paddingHorizontal: Spacing.lg,
           paddingBottom: 160,
         }}
-        removeClippedSubviews={Platform.OS === "android"}
+        removeClippedSubviews={false}
         maxToRenderPerBatch={12}
         windowSize={11}
         initialNumToRender={10}
@@ -592,7 +625,6 @@ function SongsTabComponent({
         getItemLayout={getItemLayout}
         onScroll={handleScroll}
         scrollEventThrottle={16}
-        decelerationRate="normal"
         overScrollMode="always"
         bounces
         onScrollToIndexFailed={(info) => {
@@ -761,6 +793,39 @@ function SongsTabComponent({
               color={C.bg}
             />
           </LinearGradient>
+        </TouchableOpacity>
+      </Animated.View>
+
+      <Animated.View
+        pointerEvents={showJumpButton ? "auto" : "none"}
+        style={{
+          position: "absolute",
+          bottom: 100,
+          right: 20,
+          opacity: showJumpButton ? 1 : 0,
+          transform: [{ scale: showJumpButton ? 1 : 0.95 }],
+        }}>
+        <TouchableOpacity
+          onPress={jumpDirection === "up" ? jumpToListStart : jumpToListEnd}
+          activeOpacity={0.85}
+          style={{
+            width: 56,
+            height: 56,
+            borderRadius: 28,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: C.sky,
+            shadowColor: "#000",
+            shadowOpacity: 0.2,
+            shadowRadius: 10,
+            shadowOffset: { width: 0, height: 4 },
+            elevation: 8,
+          }}>
+          <Feather
+            name={jumpDirection === "up" ? "arrow-up" : "arrow-down"}
+            size={22}
+            color="#fff"
+          />
         </TouchableOpacity>
       </Animated.View>
     </View>

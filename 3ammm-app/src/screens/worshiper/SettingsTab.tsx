@@ -232,13 +232,8 @@ export function SettingsTab() {
     const telegramUrl = `https://t.me/Threeammm7?text=${encodedText}`;
 
     try {
-      const supported = await Linking.canOpenURL(telegramUrl);
-      if (supported) {
-        await Linking.openURL(telegramUrl);
-        setFeedbackText("");
-      } else {
-        Alert.alert(t.error, t.telegramOpenError);
-      }
+      await Linking.openURL(telegramUrl);
+      setFeedbackText("");
     } catch {
       Alert.alert(t.error, t.telegramLaunchError);
     }
@@ -253,10 +248,31 @@ export function SettingsTab() {
 
   const openUrl = useCallback(async (url: string) => {
     try {
-      const supported = await Linking.canOpenURL(url);
-      if (supported) await Linking.openURL(url);
+      await Linking.openURL(url);
     } catch {
       /* silent */
+    }
+  }, []);
+
+  const openSocialUrl = useCallback(async (type: string) => {
+    try {
+      if (type === "facebook") {
+        await Linking.openURL("fb://profile/3ammm7");
+      } else if (type === "instagram") {
+        await Linking.openURL("instagram://user?username=3ammm7");
+      } else if (type === "email") {
+        await Linking.openURL("mailto:3ammministry@gmail.com");
+      }
+    } catch {
+      if (type === "facebook") {
+        await Linking.openURL("https://www.facebook.com/3ammm7");
+      } else if (type === "instagram") {
+        await Linking.openURL("https://www.instagram.com/3ammm7");
+      } else if (type === "email") {
+        await Linking.openURL(
+          "https://mail.google.com/mail/?view=cm&fs=1&to=3ammministry@gmail.com",
+        );
+      }
     }
   }, []);
 
@@ -413,7 +429,11 @@ export function SettingsTab() {
 
         <View style={[s.rowBetween, { marginTop: Spacing.md }]}>
           <View style={s.rowLeft}>
-            <MaterialCommunityIcons name="format-bold" size={20} color={C.sky} />
+            <MaterialCommunityIcons
+              name="format-bold"
+              size={20}
+              color={C.sky}
+            />
             <Text style={rowLabel}>{t.boldLyrics}</Text>
           </View>
           <Toggle value={boldLyrics} onToggle={setBoldLyrics} />
@@ -565,7 +585,13 @@ export function SettingsTab() {
                   borderColor: C.border,
                 },
               ]}
-              onPress={() => openUrl(social.url)}
+              onPress={() =>
+                social.name === "Facebook"
+                  ? openSocialUrl("facebook")
+                  : social.name === "Instagram"
+                    ? openSocialUrl("instagram")
+                    : openUrl(social.url)
+              }
               activeOpacity={0.7}>
               <FontAwesome5 name={social.icon as any} size={22} color={C.sky} />
             </TouchableOpacity>
@@ -599,7 +625,11 @@ export function SettingsTab() {
           <React.Fragment key={item.label}>
             <TouchableOpacity
               style={[s.rowBetween, { paddingVertical: Spacing.md }]}
-              onPress={() => openUrl(item.url)}
+              onPress={() =>
+                item.label === t.email
+                  ? openSocialUrl("email")
+                  : openUrl(item.url)
+              }
               activeOpacity={0.7}>
               <View style={s.rowLeft}>
                 <FontAwesome5
@@ -642,7 +672,9 @@ export function SettingsTab() {
             />
             <View>
               <Text style={rowLabel}>{t.checkForUpdates}</Text>
-              <Text style={[s.subLabel, { color: C.text3 }]}>v{appVersion}</Text>
+              <Text style={[s.subLabel, { color: C.text3 }]}>
+                v{appVersion}
+              </Text>
             </View>
           </View>
           <MaterialCommunityIcons
@@ -718,8 +750,11 @@ const s = StyleSheet.create({
     justifyContent: "center",
     gap: 6,
     paddingVertical: 11,
+    paddingHorizontal: 12,
     borderRadius: Radius.md,
     borderWidth: 1,
+    minWidth: 92,
+    flexShrink: 0,
   },
   pillText: { fontSize: 14, fontWeight: "600" },
   feedbackInput: {

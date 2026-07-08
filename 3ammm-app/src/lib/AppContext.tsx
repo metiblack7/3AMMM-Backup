@@ -31,7 +31,6 @@ import {
   fetchGoogleUserInfo,
   getAccessTokenFromResponse,
 } from "./googleAuth";
-import { startAutoSync, syncAll } from "./sync";
 import { useNetworkStatus } from "./network";
 import translations, { LangKey } from "./i18n";
 import { DarkColors, LightColors } from "../theme";
@@ -359,6 +358,7 @@ export function AppProvider({ children }: AppProviderProps) {
         await saveToken(token);
         setProfile(user);
         await registerForPushNotificationsOnSignUp(user.name).catch(() => {});
+        await preloadSongs();
         await AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(user));
 
         // Merge guest local favorites into the authenticated account
@@ -386,8 +386,6 @@ export function AppProvider({ children }: AppProviderProps) {
 
     (async () => {
       try {
-        startAutoSync();
-
         const token = await getToken();
         if (token) {
           const savedProfile = await AsyncStorage.getItem(PROFILE_KEY);
@@ -398,6 +396,7 @@ export function AppProvider({ children }: AppProviderProps) {
 
         if (token) {
           try {
+            await preloadSongs();
             const { user } = await api.auth.me();
             if (mounted) {
               setProfile(user);
@@ -418,24 +417,21 @@ export function AppProvider({ children }: AppProviderProps) {
           }
         }
 
-        const [savedFS, savedLS, savedBL, savedTheme] = await Promise.all([
-          AsyncStorage.getItem("pref_font_size"),
-          AsyncStorage.getItem("pref_line_spacing"),
-          AsyncStorage.getItem("pref_bold_lyrics"),
-          AsyncStorage.getItem("pref_theme"),
-        ]);
+        const [savedFS, savedLS, savedBL, savedTheme, savedLang] =
+          await Promise.all([
+            AsyncStorage.getItem("pref_font_size"),
+            AsyncStorage.getItem("pref_line_spacing"),
+            AsyncStorage.getItem("pref_bold_lyrics"),
+            AsyncStorage.getItem("pref_theme"),
+            AsyncStorage.getItem("pref_lang"),
+          ]);
 
         if (mounted) {
           if (savedFS) setFontSize(parseFloat(savedFS));
           if (savedLS) setLineSpacing(parseFloat(savedLS));
           if (savedBL) setBoldLyrics(savedBL === "true");
           if (savedTheme) setTheme(savedTheme as "light" | "dark");
-        }
-
-        if (isOnline) {
-          syncAll(true).catch((err) =>
-            console.error("Initial sync failed:", err),
-          );
+          if (savedLang) setLang(savedLang as LangKey);
         }
       } catch (err) {
         console.error("Initialization error:", err);
@@ -451,6 +447,15 @@ export function AppProvider({ children }: AppProviderProps) {
   }, [isOnline]);
 
   // ── Auth functions ────────────────────────────────────────────
+  async function preloadSongs() {
+    try {
+      const songs = await api.songs.getAll();
+      await db.songs.save(songs as any);
+    } catch (err) {
+      console.warn("Failed to preload songs:", err);
+    }
+  }
+
   async function signIn(email: string, password: string) {
     setAuthError("");
     try {
@@ -458,6 +463,7 @@ export function AppProvider({ children }: AppProviderProps) {
       await saveToken(token);
       setProfile(user);
       await AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(user));
+      await preloadSongs();
       // Merge guest local favorites into the authenticated account
       try {
         await favoritesService.mergeLocalOnSignIn(user).catch(() => {});
@@ -487,6 +493,7 @@ export function AppProvider({ children }: AppProviderProps) {
       await saveToken(token);
       setProfile(user);
       await registerForPushNotificationsOnSignUp(user.name).catch(() => {});
+      await preloadSongs();
       await AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(user));
       // Merge guest local favorites into the new account
       try {
@@ -542,7 +549,11 @@ export function AppProvider({ children }: AppProviderProps) {
   }
 
   function toggleLang() {
-    setLang((prev: LangKey) => (prev === "en" ? "am" : "en"));
+    setLang((prev: LangKey) => {
+      const next = prev === "en" ? "am" : "en";
+      AsyncStorage.setItem("pref_lang", next).catch(() => {});
+      return next;
+    });
   }
 
   async function handleSetFontSize(size: number) {

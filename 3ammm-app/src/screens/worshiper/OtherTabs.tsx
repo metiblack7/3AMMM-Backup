@@ -14,6 +14,7 @@ import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useApp } from "../../lib/AppContext";
 import { useTheme } from "../../lib/useTheme";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Loader, EmptyState } from "../../components/UI";
 import { Spacing, Radius } from "../../theme";
 import { Song } from "../LyricsScreen";
@@ -84,7 +85,9 @@ function FavoriteSongCard({
 
           <View style={ss.songInfo}>
             <Text style={[ss.songTitle, { color: C.text }]}>{item.title}</Text>
-            <Text style={[ss.songMeta, { color: C.text2 }]}>{item.singerName}</Text>
+            <Text style={[ss.songMeta, { color: C.text2 }]}>
+              {item.singerName}
+            </Text>
           </View>
 
           <Feather name="chevron-right" size={18} color={C.text3} />
@@ -95,9 +98,15 @@ function FavoriteSongCard({
             ss.songFooter,
             { borderTopColor: isDark ? C.glassBorder : C.border },
           ]}>
-          <Text style={[ss.songNumber, { color: C.text3 }]}>{item.pageNumber}</Text>
-          <View style={[ss.keyChip, { backgroundColor: C.goldDeep ?? C.skyPale }]}> 
-            <Text style={[ss.keyChipText, { color: C.gold ?? C.sky }]}> {item.key} </Text>
+          <Text style={[ss.songNumber, { color: C.text3 }]}>
+            {item.pageNumber}
+          </Text>
+          <View
+            style={[ss.keyChip, { backgroundColor: C.goldDeep ?? C.skyPale }]}>
+            <Text style={[ss.keyChipText, { color: C.gold ?? C.sky }]}>
+              {" "}
+              {item.key}{" "}
+            </Text>
           </View>
         </View>
       </LinearGradient>
@@ -108,12 +117,16 @@ function FavoriteSongCard({
 // ── SETLISTS TAB ─────────────────────────────────────────────
 export function SetlistsTab({ onOpenSong }: SongProps) {
   const { t } = useApp();
-  const { C } = useTheme();
+  const { C, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
   const [setlists, setSetlists] = useState<LocalSetlist[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const TOP = Platform.OS === "ios" ? 50 : (StatusBar.currentHeight ?? 24) + 8;
+  const TOP =
+    Platform.OS === "ios"
+      ? insets.top + 8
+      : (StatusBar.currentHeight ?? 24) + 8;
 
   async function load() {
     try {
@@ -177,7 +190,13 @@ export function SetlistsTab({ onOpenSong }: SongProps) {
       <View
         style={[
           s.headerBar,
-          { borderBottomColor: C.border, backgroundColor: C.surface },
+          {
+            borderBottomColor: C.border,
+            backgroundColor: isDark ? "rgba(255,255,255,0.08)" : C.surface,
+            paddingTop:
+              (Platform.OS === "ios" ? 50 : (StatusBar.currentHeight ?? 24)) +
+              8,
+          },
         ]}>
         <Text style={[s.headerTitle, { color: C.text }]}>{t.setlists}</Text>
       </View>
@@ -258,11 +277,15 @@ export function FavoritesTab({
 }: SongProps) {
   const { t, profile } = useApp();
   const { C, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
   const [songs, setSongs] = useState<Song[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const TOP = Platform.OS === "ios" ? 50 : (StatusBar.currentHeight ?? 24) + 8;
+  const TOP =
+    Platform.OS === "ios"
+      ? insets.top + 8
+      : (StatusBar.currentHeight ?? 24) + 8;
   const CARD_HEIGHT = 92;
   const CARD_GAP = Spacing.md;
 
@@ -325,7 +348,13 @@ export function FavoritesTab({
       <View
         style={[
           ss.headerBar,
-          { borderBottomColor: C.border, backgroundColor: C.surface },
+          {
+            borderBottomColor: C.border,
+            backgroundColor: isDark ? "rgba(255,255,255,0.08)" : C.surface,
+            paddingTop:
+              (Platform.OS === "ios" ? 50 : (StatusBar.currentHeight ?? 24)) +
+              8,
+          },
         ]}>
         <TouchableOpacity
           onPress={() => onBackToSongs?.()}
@@ -416,11 +445,15 @@ export function FavoritesTab({
 // ── NOTIFICATIONS TAB ─────────────────────────────────────────
 export function NotificationsTab() {
   const { t } = useApp();
-  const { C } = useTheme();
+  const { C, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
   const [notifs, setNotifs] = useState<Notif[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const TOP = Platform.OS === "ios" ? 50 : (StatusBar.currentHeight ?? 24) + 8;
+  const TOP =
+    Platform.OS === "ios"
+      ? insets.top + 8
+      : (StatusBar.currentHeight ?? 24) + 8;
 
   useEffect(() => {
     api.notifications
@@ -448,7 +481,14 @@ export function NotificationsTab() {
       style={{ flex: 1, backgroundColor: C.bg }}
       showsVerticalScrollIndicator={false}
       contentContainerStyle={{ paddingTop: TOP }}>
-      <View style={[ns.hdr, { borderBottomColor: C.border }]}>
+      <View
+        style={[
+          ns.hdr,
+          {
+            borderBottomColor: C.border,
+            backgroundColor: isDark ? "rgba(255,255,255,0.08)" : C.surface,
+          },
+        ]}>
         <Feather name="bell" size={16} color={C.sky} />
         <Text style={[ns.hdrText, { color: C.text }]}>{t.notifTitle}</Text>
       </View>
@@ -500,7 +540,8 @@ const s = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: Spacing.lg,
-    paddingVertical: 14,
+    paddingBottom: 14,
+    paddingTop: 14,
     borderBottomWidth: 1,
   },
   headerTitle: { fontSize: 16, fontWeight: "700" },
@@ -548,7 +589,11 @@ const ss = StyleSheet.create({
     borderBottomWidth: 1,
   },
   headerTitle: { fontSize: 15, fontWeight: "700", flex: 1 },
-  songCardWrap: { borderRadius: 16, overflow: "hidden", marginBottom: Spacing.md },
+  songCardWrap: {
+    borderRadius: 16,
+    overflow: "hidden",
+    marginBottom: Spacing.md,
+  },
   songCard: {
     borderRadius: 16,
     borderWidth: 0.5,

@@ -45,6 +45,9 @@ async function registerWebPushNotification(userName: string): Promise<void> {
 async function registerNativePushNotification(userName: string): Promise<void> {
   if (!Device.isDevice) return;
 
+  const welcomeSent = await AsyncStorage.getItem("welcome_notif_sent");
+  if (welcomeSent === "true") return;
+
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
   let finalStatus = existingStatus;
 
@@ -74,14 +77,27 @@ async function registerNativePushNotification(userName: string): Promise<void> {
     await api.users.savePushToken(pushToken);
   } catch {}
 
+  const lang = (await AsyncStorage.getItem("pref_lang")) ?? "en";
+  const isAmharic = lang === "am";
+  const title = isAmharic
+    ? "እንኳን ወደ ሳባ ወላይትኛ መዝሙሮች በደህና መጡ!"
+    : "Welcome to Saba App";
+  const body = isAmharic
+    ? "መልካም የአምልኮ ጊዜ!"
+    : "Enjoy your worship time!";
+
   await Notifications.scheduleNotificationAsync({
     content: {
-      title: "Welcome to 3AMMM 🎵",
-      body: `Hey ${userName}! Your account is ready.`,
+      title,
+      body,
       sound: "default",
+      color: "#87ceeb",
+      data: { accentColor: "#87ceeb", source: "welcome" },
     },
     trigger: null,
   });
+
+  await AsyncStorage.setItem("welcome_notif_sent", "true");
 }
 
 // ── Main entry ────────────────────────────────────────────────

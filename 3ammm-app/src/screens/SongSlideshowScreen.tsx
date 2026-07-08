@@ -10,6 +10,8 @@ import {
   Dimensions,
   StatusBar,
 } from "react-native";
+import { useApp } from "../lib/AppContext";
+import { useTheme } from "../lib/useTheme";
 import { Feather } from "@expo/vector-icons";
 import * as ScreenOrientation from "expo-screen-orientation";
 import * as NavigationBar from "expo-navigation-bar";
@@ -53,10 +55,15 @@ export default function SongSlideshowScreen({
   const totalSlides = song.lyrics.length;
 
   // ── State ─────────────────────────────────────────────────
+  const { fontSize, lineSpacing, boldLyrics } = useApp();
+  const { C, isDark } = useTheme();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [autoAdvance, setAutoAdvance] = useState(false);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [dims, setDims] = useState(Dimensions.get("window"));
+  const [orientation, setOrientation] = useState<"portrait" | "landscape">(
+    dims.width > dims.height ? "landscape" : "portrait",
+  );
 
   // ── Refs ──────────────────────────────────────────────────
   const flatListRef = useRef<FlatList>(null);
@@ -94,19 +101,16 @@ export default function SongSlideshowScreen({
 
   // ── Orientation + Navigation bar ─────────────────────────
   useEffect(() => {
-    let mounted = true;
-
-    const enterFullscreen = async () => {
+    const applyOrientation = async () => {
+      const nextLock =
+        orientation === "landscape"
+          ? ScreenOrientation.OrientationLock.LANDSCAPE
+          : ScreenOrientation.OrientationLock.PORTRAIT_UP;
       try {
-        await ScreenOrientation.lockAsync(
-          ScreenOrientation.OrientationLock.LANDSCAPE_LEFT,
-        );
+        await ScreenOrientation.lockAsync(nextLock as any);
       } catch {
-        // fallback — try any landscape
         try {
-          await ScreenOrientation.lockAsync(
-            ScreenOrientation.OrientationLock.LANDSCAPE,
-          );
+          await ScreenOrientation.unlockAsync();
         } catch {}
       }
 
@@ -118,36 +122,30 @@ export default function SongSlideshowScreen({
       }
     };
 
-    const exitFullscreen = async () => {
-      try {
-        await ScreenOrientation.lockAsync(
-          ScreenOrientation.OrientationLock.PORTRAIT_UP,
-        );
-      } catch {
-        try {
-          await ScreenOrientation.unlockAsync();
-        } catch {}
-      }
-
-      if (Platform.OS === "android") {
-        try {
-          await NavigationBar.setVisibilityAsync("visible");
-        } catch {}
-      }
-    };
-
-    enterFullscreen();
+    applyOrientation();
 
     return () => {
-      mounted = false;
-      exitFullscreen();
+      if (Platform.OS === "android") {
+        try {
+          NavigationBar.setVisibilityAsync("visible").catch(() => {});
+        } catch {}
+      }
+      ScreenOrientation.unlockAsync().catch(() => {});
     };
-  }, []);
+  }, [orientation]);
 
   // ── Dimension listener (handles orientation change) ───────
   useEffect(() => {
-    const sub = Dimensions.addEventListener("change", ({ window }) => {
-      setDims(window);
+    const sub = ScreenOrientation.addOrientationChangeListener((event) => {
+      const nextOrientation =
+        event.orientationInfo.orientation ===
+          ScreenOrientation.Orientation.LANDSCAPE_LEFT ||
+        event.orientationInfo.orientation ===
+          ScreenOrientation.Orientation.LANDSCAPE_RIGHT
+          ? "landscape"
+          : "portrait";
+      setOrientation(nextOrientation);
+      setDims(Dimensions.get("window"));
     });
     return () => sub.remove();
   }, []);
@@ -285,25 +283,37 @@ export default function SongSlideshowScreen({
   // ── Render slide ──────────────────────────────────────────
   const renderSlide = useCallback(
     ({ item }: { item: { s: string; t: string } }) => (
-      <View style={[styles.slide, { width: dims.width, height: dims.height }]}>
+      <View
+        style={[
+          styles.slide,
+          {
+            width: dims.width,
+            height: dims.height,
+            backgroundColor: isDark ? "#010f18" : C.bg,
+          },
+        ]}>
         <Animated.View
           style={[
             styles.slideInner,
             { opacity: slideFade, width: dims.width, height: dims.height },
           ]}>
           {/* Section label — subtle, above lyrics */}
-          <Text style={styles.sectionLabel}>
-            {(item.s ?? "").trim().toUpperCase() || "♪"}
-          </Text>
+          <View style={styles.sectionLabelRow}>
+            <View style={[styles.sectionBar, { backgroundColor: GOLD }]} />
+            <Text style={[styles.sectionLabel, { color: SKY }]}>
+              {(item.s ?? "").trim().toUpperCase() || "♪"}
+            </Text>
+          </View>
 
           {/* Lyrics — large, centered */}
           <Text
             style={[
               styles.lyricsText,
               {
-                // Scale font size slightly with screen width
-                fontSize: Math.min(32, dims.width * 0.048),
-                lineHeight: Math.min(32, dims.width * 0.048) * 1.55,
+                color: isDark ? WHITE : C.text,
+                fontSize: fontSize,
+                lineHeight: fontSize * lineSpacing,
+                fontWeight: boldLyrics ? "600" : "300",
               },
             ]}
             adjustsFontSizeToFit
@@ -313,7 +323,7 @@ export default function SongSlideshowScreen({
         </Animated.View>
       </View>
     ),
-    [dims, slideFade],
+    [dims, slideFade, isDark, C.bg, C.text, fontSize, lineSpacing, boldLyrics],
   );
 
   // ── Progress bar width ────────────────────────────────────
@@ -476,17 +486,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: 64,
     paddingVertical: 48,
   },
+  sectionLabelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 28,
+    gap: 10,
+  },
+  sectionBar: {
+    width: 3,
+    height: 18,
+    borderRadius: 2,
+  },
   sectionLabel: {
     fontSize: 12,
     fontWeight: "700",
     letterSpacing: 3,
-    color: SKY_60,
     textTransform: "uppercase",
-    marginBottom: 28,
     textAlign: "center",
   },
   lyricsText: {
-    color: WHITE,
     fontWeight: "300",
     textAlign: "center",
     letterSpacing: 0.3,
