@@ -270,9 +270,6 @@ function SongsTabComponent({
   const [singerFilter, setSingerFilter] = useState("All");
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
-  const [showJumpButton, setShowJumpButton] = useState(false);
-  const [jumpDirection, setJumpDirection] = useState<"up" | "down">("up");
-  const jumpHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [pageInputVisible, setPageInputVisible] = useState(false);
   const [pageQuery, setPageQuery] = useState("");
@@ -421,26 +418,11 @@ function SongsTabComponent({
     }).start();
   }, [query, singerFilter, listFade]);
 
-  const clearJumpHideTimer = useCallback(() => {
-    if (jumpHideTimer.current) {
-      clearTimeout(jumpHideTimer.current);
-      jumpHideTimer.current = null;
-    }
-  }, []);
-
   const handleScroll = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       scrollOffsetRef.current = e.nativeEvent.contentOffset.y;
-      const velocity = e.nativeEvent.velocity?.y ?? 0;
-      const nextDirection = velocity > 0.5 ? "down" : "up";
-      setJumpDirection(nextDirection);
-      setShowJumpButton(true);
-      clearJumpHideTimer();
-      jumpHideTimer.current = setTimeout(() => {
-        setShowJumpButton(false);
-      }, 300);
     },
-    [scrollOffsetRef, clearJumpHideTimer],
+    [scrollOffsetRef],
   );
 
   useEffect(() => {
@@ -467,17 +449,6 @@ function SongsTabComponent({
     }),
     [],
   );
-
-  const jumpToListStart = useCallback(() => {
-    listRef.current?.scrollToIndex({ index: 0, animated: false });
-  }, []);
-
-  const jumpToListEnd = useCallback(() => {
-    listRef.current?.scrollToIndex({
-      index: filtered.length - 1,
-      animated: false,
-    });
-  }, [filtered.length]);
 
   const shakeAnimation = useCallback(() => {
     Animated.sequence([
@@ -793,39 +764,6 @@ function SongsTabComponent({
               color={C.bg}
             />
           </LinearGradient>
-        </TouchableOpacity>
-      </Animated.View>
-
-      <Animated.View
-        pointerEvents={showJumpButton ? "auto" : "none"}
-        style={{
-          position: "absolute",
-          bottom: 100,
-          right: 20,
-          opacity: showJumpButton ? 1 : 0,
-          transform: [{ scale: showJumpButton ? 1 : 0.95 }],
-        }}>
-        <TouchableOpacity
-          onPress={jumpDirection === "up" ? jumpToListStart : jumpToListEnd}
-          activeOpacity={0.85}
-          style={{
-            width: 56,
-            height: 56,
-            borderRadius: 28,
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: C.sky,
-            shadowColor: "#000",
-            shadowOpacity: 0.2,
-            shadowRadius: 10,
-            shadowOffset: { width: 0, height: 4 },
-            elevation: 8,
-          }}>
-          <Feather
-            name={jumpDirection === "up" ? "arrow-up" : "arrow-down"}
-            size={22}
-            color="#fff"
-          />
         </TouchableOpacity>
       </Animated.View>
     </View>

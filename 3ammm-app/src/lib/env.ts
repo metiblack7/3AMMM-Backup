@@ -29,10 +29,22 @@ const API_URLS = {
 } as const;
 
 export const API_URL = API_URLS[ENV];
+
 // ── Google Auth Configuration ────────────────────────────────────
-// Web client ID for Google OAuth
+// Platform-specific Client IDs for Google OAuth
+const GOOGLE_CLIENT_IDS = {
+  android: "991044441560-q9fc0fh9jtgqu12a6mri50bqy2h178.apps.googleusercontent.com",
+  web: "991044441560-iop8dkjg2drcs0vi105fe8j2t71g6dc2.apps.googleusercontent.com",
+  // iOS and other platforms use web client ID as fallback
+  default: "991044441560-iop8dkjg2drcs0vi105fe8j2t71g6dc2.apps.googleusercontent.com",
+} as const;
+
 export const GOOGLE_AUTH_CLIENT_ID =
-  "991044441560-iop8dkjg2drcs0vi105fe8j2t71g6dc2.apps.googleusercontent.com";
+  Platform.OS === "android"
+    ? GOOGLE_CLIENT_IDS.android
+    : Platform.OS === "web"
+      ? GOOGLE_CLIENT_IDS.web
+      : GOOGLE_CLIENT_IDS.default;
 // ── Feature Flags ────────────────────────────────────────────────────
 export const FEATURES = {
   OFFLINE_MODE: true,

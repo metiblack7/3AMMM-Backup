@@ -5,6 +5,7 @@
     "icon": "./assets/icon.png",
     "version": "1.0.0",
     "orientation": "default",
+    "scheme": "com.ammm.worship",
     "platforms": [
       "ios",
       "android",
@@ -28,7 +29,19 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#043954"
       },
-      "package": "com.ammm.worship"
+      "package": "com.ammm.worship",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "data": {
+            "scheme": "com.ammm.worship"
+          },
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
