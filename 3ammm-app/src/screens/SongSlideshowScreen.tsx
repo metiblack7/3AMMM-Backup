@@ -100,19 +100,22 @@ export default function SongSlideshowScreen({
   };
 
   // ── Orientation + Navigation bar ─────────────────────────
+  // ── Orientation + Navigation bar (Task 2) ─────────────────
   useEffect(() => {
-    const applyOrientation = async () => {
-      const nextLock =
-        orientation === "landscape"
-          ? ScreenOrientation.OrientationLock.LANDSCAPE
-          : ScreenOrientation.OrientationLock.PORTRAIT_UP;
+    const setup = async () => {
+      // Unlock ALL orientations — let the device sensor decide
       try {
-        await ScreenOrientation.lockAsync(nextLock as any);
+        await ScreenOrientation.lockAsync(
+          ScreenOrientation.OrientationLock.ALL,
+        );
       } catch {
         try {
           await ScreenOrientation.unlockAsync();
         } catch {}
       }
+
+      // Hide status bar in fullscreen
+      StatusBar.setHidden(true);
 
       if (Platform.OS === "android") {
         try {
@@ -122,39 +125,31 @@ export default function SongSlideshowScreen({
       }
     };
 
-    applyOrientation();
+    setup();
+
+    // Register orientation listener for dimension updates
+    const sub = ScreenOrientation.addOrientationChangeListener(() => {
+      const newDims = Dimensions.get("window");
+      setDims(newDims);
+    });
 
     return () => {
+      // Cleanup orientation listener
+      sub.remove();
+
+      // Restore portrait on exit
+      ScreenOrientation.lockAsync(
+        ScreenOrientation.OrientationLock.PORTRAIT_UP,
+      ).catch(() => {});
+
+      // Show status bar on exit
+      StatusBar.setHidden(false);
+
       if (Platform.OS === "android") {
-        try {
-          NavigationBar.setVisibilityAsync("visible").catch(() => {});
-        } catch {}
+        NavigationBar.setVisibilityAsync("visible").catch(() => {});
       }
-      ScreenOrientation.unlockAsync().catch(() => {});
     };
-  }, [orientation]);
-
-  // ── Dimension listener (handles orientation change) ───────
-  useEffect(() => {
-    const sub = ScreenOrientation.addOrientationChangeListener((event) => {
-      const nextOrientation =
-        event.orientationInfo.orientation ===
-          ScreenOrientation.Orientation.LANDSCAPE_LEFT ||
-        event.orientationInfo.orientation ===
-          ScreenOrientation.Orientation.LANDSCAPE_RIGHT
-          ? "landscape"
-          : "portrait";
-      setOrientation(nextOrientation);
-      setDims(Dimensions.get("window"));
-    });
-    return () => sub.remove();
-  }, []);
-
-  // ── StatusBar — hidden in slideshow ───────────────────────
-  useEffect(() => {
-    StatusBar.setHidden(true, "fade");
-    return () => StatusBar.setHidden(false, "fade");
-  }, []);
+  }, []); // ← no dependency on `orientation` — runs once on mount/unmount
 
   // ── Hardware back button ──────────────────────────────────
   useEffect(() => {

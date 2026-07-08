@@ -9,10 +9,10 @@ WebBrowser.maybeCompleteAuthSession();
 
 // ── Client IDs (same for dev and production) ──────────────────
 export const ANDROID_CLIENT_ID =
-  "991044441560-q9fc0fh9jtgqu12a6mri50bqy2h178.apps.googleusercontent.com";
+  "991044441560-iop8dkjg2drcs0vi105fe8j2t71g6dc2.apps.googleusercontent.com";
 
 export const WEB_CLIENT_ID =
-  "991044441560-iop8dkjg2drcs0vi105fe8j2t71g6dc2.apps.googleusercontent.com";
+  "991044441560-q9fc0fh9vjthgdu12a6mri50bgv2h178.apps.googleusercontent.com";
 
 // ── Redirect URIs ──────────────────────────────────────────────
 // For native apps (Android/iOS): uses the app's custom scheme

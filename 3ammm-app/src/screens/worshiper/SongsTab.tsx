@@ -69,6 +69,7 @@ const AnimatedSongCard = React.memo(function AnimatedSongCard({
   cardGradients: (category: string) => [string, string];
   onOpenSong: (song: Song) => void;
 }) {
+  const { fs } = useApp();
   const mountOpacity = useRef(new Animated.Value(0)).current;
   const mountTranslateY = useRef(new Animated.Value(22)).current;
   const mountScale = useRef(new Animated.Value(0.96)).current;
@@ -144,10 +145,10 @@ const AnimatedSongCard = React.memo(function AnimatedSongCard({
             </View>
 
             <View style={ss.songInfo}>
-              <Text style={[ss.songTitle, { color: C.text }]}>
+              <Text style={[ss.songTitle, { color: C.text, fontSize: fs(15) }]}>
                 {item.title}
               </Text>
-              <Text style={[ss.songMeta, { color: C.text2, flexShrink: 1 }]}>
+              <Text style={[ss.songMeta, { color: C.text2, flexShrink: 1, fontSize: fs(12) }]}>
                 {item.singerName}
               </Text>
             </View>
@@ -160,11 +161,11 @@ const AnimatedSongCard = React.memo(function AnimatedSongCard({
               ss.songFooter,
               { borderTopColor: isDark ? C.glassBorder : C.border },
             ]}>
-            <Text style={[ss.songNumber, { color: C.text3 }]}>
+            <Text style={[ss.songNumber, { color: C.text3, fontSize: fs(18) }]}>
               {item.pageNumber}
             </Text>
             <View style={[ss.keyChip, { backgroundColor: C.goldDeep }]}>
-              <Text style={[ss.keyChipText, { color: C.gold }]}>
+              <Text style={[ss.keyChipText, { color: C.gold, fontSize: fs(11) }]}>
                 {item.key}
               </Text>
             </View>

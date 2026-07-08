@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useState, useCallback, useRef, useEffect } from "react";
 import {
   View,
   ScrollView,
@@ -14,7 +14,6 @@ import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useApp } from "../../lib/AppContext";
 import { useTheme } from "../../lib/useTheme";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Loader, EmptyState } from "../../components/UI";
 import { Spacing, Radius } from "../../theme";
 import { Song } from "../LyricsScreen";
@@ -22,6 +21,7 @@ import { favoritesService } from "../../lib/favoritesService";
 import { subscribe } from "../../lib/pubsub";
 import { api } from "../../lib/api";
 import { db, Setlist as DBSetlist } from "../../lib/db";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 interface LocalSetlist extends Pick<DBSetlist, "_id" | "date" | "songIds"> {
   title: string;
@@ -54,6 +54,7 @@ function FavoriteSongCard({
   C: ReturnType<typeof useTheme>["C"];
   onOpenSong: (song: Song) => void;
 }) {
+  const { fs } = useApp();
   const [g1, g2] = isDark ? ["#082f41", "#00121e"] : ["#DFF5FF", "#F7FCFF"];
 
   return (
@@ -67,9 +68,7 @@ function FavoriteSongCard({
         end={{ x: 1, y: 1 }}
         style={[
           ss.songCard,
-          {
-            borderColor: isDark ? C.glassBorder : C.border,
-          },
+          { borderColor: isDark ? C.glassBorder : C.border },
         ]}>
         <View style={ss.songHeader}>
           <View
@@ -84,8 +83,8 @@ function FavoriteSongCard({
           </View>
 
           <View style={ss.songInfo}>
-            <Text style={[ss.songTitle, { color: C.text }]}>{item.title}</Text>
-            <Text style={[ss.songMeta, { color: C.text2 }]}>
+            <Text style={[ss.songTitle, { color: C.text, fontSize: fs(15) }]}>{item.title}</Text>
+            <Text style={[ss.songMeta, { color: C.text2, fontSize: fs(12) }]}>
               {item.singerName}
             </Text>
           </View>
@@ -98,14 +97,13 @@ function FavoriteSongCard({
             ss.songFooter,
             { borderTopColor: isDark ? C.glassBorder : C.border },
           ]}>
-          <Text style={[ss.songNumber, { color: C.text3 }]}>
+          <Text style={[ss.songNumber, { color: C.text3, fontSize: fs(18) }]}>
             {item.pageNumber}
           </Text>
           <View
             style={[ss.keyChip, { backgroundColor: C.goldDeep ?? C.skyPale }]}>
-            <Text style={[ss.keyChipText, { color: C.gold ?? C.sky }]}>
-              {" "}
-              {item.key}{" "}
+            <Text style={[ss.keyChipText, { color: C.gold ?? C.sky, fontSize: fs(11) }]}>
+              {item.key}
             </Text>
           </View>
         </View>
@@ -114,23 +112,21 @@ function FavoriteSongCard({
   );
 }
 
-// ── SETLISTS TAB ─────────────────────────────────────────────
+// ── SETLISTS TAB ──────────────────────────────────────────────
 export function SetlistsTab({ onOpenSong }: SongProps) {
   const { t } = useApp();
-  const { C, isDark } = useTheme();
+  const { C } = useTheme();
   const insets = useSafeAreaInsets();
   const [setlists, setSetlists] = useState<LocalSetlist[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
+  // Task 7: use safe area inset for correct top spacing
   const TOP =
-    Platform.OS === "ios"
-      ? insets.top + 8
-      : (StatusBar.currentHeight ?? 24) + 8;
+    Platform.OS === "ios" ? insets.top : (StatusBar.currentHeight ?? 24) + 8;
 
   async function load() {
     try {
-      // Try server first
       const data = await api.setlists.getAll();
       if (Array.isArray(data)) {
         const normalized = data.map((item) => ({
@@ -140,24 +136,20 @@ export function SetlistsTab({ onOpenSong }: SongProps) {
         setSetlists(normalized);
         try {
           await db.setlists.save(data);
-        } catch {
-          /* ignore */
-        }
+        } catch {}
       }
     } catch {
-      // Fallback to local cache
       try {
         const cached = await db.setlists.getAll();
         if (Array.isArray(cached)) {
-          const normalized = cached.map((item) => ({
-            ...item,
-            title: item.title ?? item.name ?? "Untitled setlist",
-          })) as LocalSetlist[];
-          setSetlists(normalized);
+          setSetlists(
+            cached.map((item) => ({
+              ...item,
+              title: item.title ?? item.name ?? "Untitled setlist",
+            })) as LocalSetlist[],
+          );
         }
-      } catch {
-        /* ignore */
-      }
+      } catch {}
     } finally {
       setLoading(false);
     }
@@ -176,10 +168,14 @@ export function SetlistsTab({ onOpenSong }: SongProps) {
   if (loading) return <Loader />;
 
   return (
+    // Task 3: plain ScrollView, no animation, no scroll handlers
     <ScrollView
       style={{ flex: 1, backgroundColor: C.bg }}
       showsVerticalScrollIndicator={false}
-      contentContainerStyle={{ paddingTop: TOP }}
+      overScrollMode="never"
+      bounces={false}
+      scrollEventThrottle={0}
+      contentContainerStyle={{ paddingTop: TOP, paddingBottom: 120 }}
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
@@ -187,19 +183,15 @@ export function SetlistsTab({ onOpenSong }: SongProps) {
           tintColor={C.sky}
         />
       }>
+      {/* Task 7: header uses C.bg, correct top spacing via paddingTop on ScrollView */}
       <View
         style={[
           s.headerBar,
-          {
-            borderBottomColor: C.border,
-            backgroundColor: isDark ? "rgba(255,255,255,0.08)" : C.surface,
-            paddingTop:
-              (Platform.OS === "ios" ? 50 : (StatusBar.currentHeight ?? 24)) +
-              8,
-          },
+          { borderBottomColor: C.border, backgroundColor: C.bg },
         ]}>
         <Text style={[s.headerTitle, { color: C.text }]}>{t.setlists}</Text>
       </View>
+
       {setlists.length === 0 ? (
         <EmptyState
           icon={<Feather name="calendar" size={22} color={C.sky} />}
@@ -215,7 +207,6 @@ export function SetlistsTab({ onOpenSong }: SongProps) {
                 s.card,
                 { backgroundColor: C.surface, borderColor: C.border },
               ]}>
-              {/* Card header */}
               <View
                 style={[
                   s.cardHdr,
@@ -234,7 +225,6 @@ export function SetlistsTab({ onOpenSong }: SongProps) {
                 </Text>
               </View>
 
-              {/* Songs */}
               {songs.map((song, i) => (
                 <TouchableOpacity
                   key={song._id}
@@ -246,7 +236,7 @@ export function SetlistsTab({ onOpenSong }: SongProps) {
                     ],
                   ]}
                   onPress={() => onOpenSong(song)}
-                  activeOpacity={0.7}>
+                  activeOpacity={0.75}>
                   <Text style={[s.songNum, { color: C.sky }]}>{i + 1}</Text>
                   <Text
                     style={[s.songName, { color: C.text, flex: 1 }]}
@@ -264,7 +254,7 @@ export function SetlistsTab({ onOpenSong }: SongProps) {
           );
         })
       )}
-      <View style={{ height: 120 }} />
+      <View style={{ height: 20 }} />
     </ScrollView>
   );
 }
@@ -282,10 +272,10 @@ export function FavoritesTab({
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
+  // Task 7: correct top spacing
   const TOP =
-    Platform.OS === "ios"
-      ? insets.top + 8
-      : (StatusBar.currentHeight ?? 24) + 8;
+    Platform.OS === "ios" ? insets.top : (StatusBar.currentHeight ?? 24) + 8;
+
   const CARD_HEIGHT = 92;
   const CARD_GAP = Spacing.md;
 
@@ -324,11 +314,7 @@ export function FavoritesTab({
 
   if (loading) return <Loader />;
 
-  // ── Use the global song list order for page numbers ───────────
-  // Match each favorite against allSongs by _id to get the same
-  // page number shown in the Songs tab. Fall back to the favorite's
-  // own position only if it can't be found in the global list
-  // (e.g. song was deleted from server but still cached locally).
+  // Use global song list order for page numbers (same as SongsTab)
   const numberedSongs: NumberedSong[] = songs.map((song, index) => {
     const globalIndex = allSongs.findIndex((s) => s._id === song._id);
     return {
@@ -345,15 +331,14 @@ export function FavoritesTab({
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
+      {/* Task 7: header uses C.bg, paddingTop = safe area inset */}
       <View
         style={[
           ss.headerBar,
           {
+            paddingTop: TOP,
             borderBottomColor: C.border,
-            backgroundColor: isDark ? "rgba(255,255,255,0.08)" : C.surface,
-            paddingTop:
-              (Platform.OS === "ios" ? 50 : (StatusBar.currentHeight ?? 24)) +
-              8,
+            backgroundColor: C.bg,
           },
         ]}>
         <TouchableOpacity
@@ -401,6 +386,7 @@ export function FavoritesTab({
         <View style={{ width: 10 }} />
       </View>
 
+      {/* Task 3: plain FlatList, no scroll animation */}
       <FlatList
         data={numberedSongs}
         keyExtractor={(item) => item._id}
@@ -426,13 +412,15 @@ export function FavoritesTab({
           />
         }
         showsVerticalScrollIndicator={false}
+        overScrollMode="never"
+        bounces={false}
         contentContainerStyle={{
           paddingTop: 10,
           paddingHorizontal: Spacing.lg,
           paddingBottom: 160,
         }}
         getItemLayout={getItemLayout}
-        removeClippedSubviews={Platform.OS === "android"}
+        removeClippedSubviews={false}
         maxToRenderPerBatch={12}
         windowSize={11}
         initialNumToRender={10}
@@ -445,15 +433,13 @@ export function FavoritesTab({
 // ── NOTIFICATIONS TAB ─────────────────────────────────────────
 export function NotificationsTab() {
   const { t } = useApp();
-  const { C, isDark } = useTheme();
+  const { C } = useTheme();
   const insets = useSafeAreaInsets();
   const [notifs, setNotifs] = useState<Notif[]>([]);
   const [loading, setLoading] = useState(true);
 
   const TOP =
-    Platform.OS === "ios"
-      ? insets.top + 8
-      : (StatusBar.currentHeight ?? 24) + 8;
+    Platform.OS === "ios" ? insets.top : (StatusBar.currentHeight ?? 24) + 8;
 
   useEffect(() => {
     api.notifications
@@ -477,17 +463,18 @@ export function NotificationsTab() {
   if (loading) return <Loader />;
 
   return (
+    // Task 3: plain ScrollView, no animation
     <ScrollView
       style={{ flex: 1, backgroundColor: C.bg }}
       showsVerticalScrollIndicator={false}
-      contentContainerStyle={{ paddingTop: TOP }}>
+      overScrollMode="never"
+      bounces={false}
+      scrollEventThrottle={0}
+      contentContainerStyle={{ paddingTop: TOP, paddingBottom: 120 }}>
       <View
         style={[
           ns.hdr,
-          {
-            borderBottomColor: C.border,
-            backgroundColor: isDark ? "rgba(255,255,255,0.08)" : C.surface,
-          },
+          { borderBottomColor: C.border, backgroundColor: C.bg },
         ]}>
         <Feather name="bell" size={16} color={C.sky} />
         <Text style={[ns.hdrText, { color: C.text }]}>{t.notifTitle}</Text>
@@ -534,14 +521,12 @@ export function NotificationsTab() {
 
 // ── STYLES ────────────────────────────────────────────────────
 
-// Setlists
 const s = StyleSheet.create({
   headerBar: {
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: Spacing.lg,
-    paddingBottom: 14,
-    paddingTop: 14,
+    paddingVertical: 14,
     borderBottomWidth: 1,
   },
   headerTitle: { fontSize: 16, fontWeight: "700" },
@@ -578,14 +563,13 @@ const s = StyleSheet.create({
   keyChipText: { fontSize: 10, fontWeight: "700" },
 });
 
-// Favorites
 const ss = StyleSheet.create({
   headerBar: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
     paddingHorizontal: Spacing.lg,
-    paddingVertical: 14,
+    paddingBottom: 14,
     borderBottomWidth: 1,
   },
   headerTitle: { fontSize: 15, fontWeight: "700", flex: 1 },
@@ -659,7 +643,6 @@ const ss = StyleSheet.create({
   },
 });
 
-// Notifications
 const ns = StyleSheet.create({
   hdr: {
     flexDirection: "row",
