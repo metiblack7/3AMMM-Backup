@@ -113,64 +113,70 @@ const AnimatedSongCard = React.memo(function AnimatedSongCard({
         transform: [{ translateY: mountTranslateY }, { scale: mountScale }],
         marginBottom: CARD_GAP,
       }}>
-      <TouchableOpacity
-        style={ss.songCardWrap}
-        onPress={() => onOpenSong(item)}
-        activeOpacity={0.75}>
-        <LinearGradient
-          colors={[g1, g2]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={[
-            ss.songCard,
-            {
-              borderColor: isDark ? C.glassBorder : C.border,
-              ...Platform.select({
-                ios: { shadowColor: isDark ? C.sky : C.navy },
-                android: {},
-              }),
-            },
-          ]}>
-          <View style={ss.songHeader}>
+      <View style={ss.songCardWrap}>
+        <TouchableOpacity
+          onPress={() => onOpenSong(item)}
+          activeOpacity={0.75}
+          {...({ android_ripple: null } as any)}>
+          <LinearGradient
+            colors={[g1, g2]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={[
+              ss.songCard,
+              {
+                borderColor: isDark ? C.glassBorder : C.border,
+                ...Platform.select({
+                  ios: { shadowColor: isDark ? C.sky : C.navy },
+                  android: {},
+                }),
+              },
+            ]}>
+            <View style={ss.songHeader}>
+              <View
+                style={[
+                  ss.artContainer,
+                  {
+                    backgroundColor: isDark ? C.skyGlowSoft : C.skyPale,
+                    borderColor: C.skyBorder,
+                  },
+                ]}>
+                <Feather
+                  name="music"
+                  size={20}
+                  color={isDark ? C.sky : C.navy}
+                />
+              </View>
+
+              <View style={ss.songInfo}>
+                <Text style={[ss.songTitle, { color: C.text }]}>
+                  {item.title}
+                </Text>
+                <Text style={[ss.songMeta, { color: C.text2, flexShrink: 1 }]}>
+                  {item.singerName}
+                </Text>
+              </View>
+
+              <Feather name="chevron-right" size={18} color={C.text3} />
+            </View>
+
             <View
               style={[
-                ss.artContainer,
-                {
-                  backgroundColor: isDark ? C.skyGlowSoft : C.skyPale,
-                  borderColor: C.skyBorder,
-                },
+                ss.songFooter,
+                { borderTopColor: isDark ? C.glassBorder : C.border },
               ]}>
-              <Feather name="music" size={20} color={isDark ? C.sky : C.navy} />
-            </View>
-
-            <View style={ss.songInfo}>
-              <Text style={[ss.songTitle, { color: C.text }]}>
-                {item.title}
+              <Text style={[ss.songNumber, { color: C.text3 }]}>
+                {item.pageNumber}
               </Text>
-              <Text style={[ss.songMeta, { color: C.text2, flexShrink: 1 }]}>
-                {item.singerName}
-              </Text>
+              <View style={[ss.keyChip, { backgroundColor: C.goldDeep }]}>
+                <Text style={[ss.keyChipText, { color: C.gold }]}>
+                  {item.key}
+                </Text>
+              </View>
             </View>
-
-            <Feather name="chevron-right" size={18} color={C.text3} />
-          </View>
-
-          <View
-            style={[
-              ss.songFooter,
-              { borderTopColor: isDark ? C.glassBorder : C.border },
-            ]}>
-            <Text style={[ss.songNumber, { color: C.text3 }]}>
-              {item.pageNumber}
-            </Text>
-            <View style={[ss.keyChip, { backgroundColor: C.goldDeep }]}>
-              <Text style={[ss.keyChipText, { color: C.gold }]}>
-                {item.key}
-              </Text>
-            </View>
-          </View>
-        </LinearGradient>
-      </TouchableOpacity>
+          </LinearGradient>
+        </TouchableOpacity>
+      </View>
     </Animated.View>
   );
 });
@@ -255,7 +261,7 @@ function SongsTabComponent({
   scrollOffsetRef,
   onSongsLoaded,
 }: Props) {
-  const { t } = useApp();
+  const { t, fs } = useApp();
   const { C, isDark } = useTheme();
   const isOnline = useNetworkStatus();
   const insets = useSafeAreaInsets();
@@ -680,17 +686,27 @@ function SongsTabComponent({
                   },
                 ]}
                 onPress={() => setSingerFilter(s)}
-                activeOpacity={0.75}>
+                activeOpacity={0.75}
+                {...({ android_ripple: null } as any)}>
                 {singerFilter === s ? (
                   <LinearGradient
                     colors={[C.sky, C.skyDeep]}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 0 }}
                     style={ss.pillGradient}>
-                    <Text style={[ss.pillTextOn, { color: C.bg }]}>{s}</Text>
+                    <Text
+                      style={[
+                        ss.pillTextOn,
+                        { color: C.bg, fontSize: fs(13) },
+                      ]}>
+                      {s}
+                    </Text>
                   </LinearGradient>
                 ) : (
-                  <Text style={[ss.pillText, { color: C.text2 }]}>{s}</Text>
+                  <Text
+                    style={[ss.pillText, { color: C.text2, fontSize: fs(13) }]}>
+                    {s}
+                  </Text>
                 )}
               </TouchableOpacity>
             ))}

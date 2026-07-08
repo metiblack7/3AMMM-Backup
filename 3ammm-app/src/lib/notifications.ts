@@ -61,7 +61,7 @@ async function registerNativePushNotification(userName: string): Promise<void> {
   if (Platform.OS === "android") {
     await Notifications.setNotificationChannelAsync("3ammm_default", {
       name: "3AMMM Notifications",
-      importance: Notifications.AndroidImportance.MAX,
+      importance: Notifications.AndroidImportance.HIGH,
       vibrationPattern: [0, 250, 250, 250],
       lightColor: "#fbb040",
       sound: "default",
@@ -77,11 +77,17 @@ async function registerNativePushNotification(userName: string): Promise<void> {
     await api.users.savePushToken(pushToken);
   } catch {}
 
-  const lang = (await AsyncStorage.getItem("pref_lang")) ?? "en";
-  const isAmharic = lang === "am";
+  await scheduleWelcomeNotification((await AsyncStorage.getItem("pref_lang")) ?? "en");
+}
+
+export async function scheduleWelcomeNotification(lang: string | null = null): Promise<void> {
+  const alreadySent = await AsyncStorage.getItem("welcome_notif_sent");
+  if (alreadySent === "true") return;
+
+  const isAmharic = (lang ?? "en") === "am";
   const title = isAmharic
-    ? "እንኳን ወደ ሳባ ወላይትኛ መዝሙሮች በደህና መጡ!"
-    : "Welcome to Saba App";
+    ? "እንኳን ወደ ሳባ ወላይትኛ መዝሙሮች በደህና መጡ! 🎵"
+    : "Welcome to Saba App 🎵";
   const body = isAmharic
     ? "መልካም የአምልኮ ጊዜ!"
     : "Enjoy your worship time!";
@@ -91,8 +97,7 @@ async function registerNativePushNotification(userName: string): Promise<void> {
       title,
       body,
       sound: "default",
-      color: "#87ceeb",
-      data: { accentColor: "#87ceeb", source: "welcome" },
+      data: { type: "welcome" },
     },
     trigger: null,
   });
@@ -105,7 +110,9 @@ export async function registerForPushNotificationsOnSignUp(
   userName: string
 ): Promise<void> {
   const already = await AsyncStorage.getItem("3ammm_push_registered");
-  if (already === "true") return;
+  const welcomeSent = await AsyncStorage.getItem("welcome_notif_sent");
+
+  if (already === "true" && welcomeSent === "true") return;
 
   if (Platform.OS === "web") {
     await registerWebPushNotification(userName);
@@ -113,7 +120,9 @@ export async function registerForPushNotificationsOnSignUp(
     await registerNativePushNotification(userName);
   }
 
-  await AsyncStorage.setItem("3ammm_push_registered", "true");
+  if (already !== "true") {
+    await AsyncStorage.setItem("3ammm_push_registered", "true");
+  }
 }
 
 // ── LISTENERS (FIXED - NO MORE BROKEN API) ───────────────────

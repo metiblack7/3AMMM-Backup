@@ -27,8 +27,12 @@ import { startAutoSync, syncAll } from "./sync";
 import { useNetworkStatus } from "./network";
 import translations, { LangKey } from "./i18n";
 import { DarkColors, LightColors } from "../theme";
-import { registerForPushNotificationsOnSignUp } from "./notifications";
+import {
+  registerForPushNotificationsOnSignUp,
+  scheduleWelcomeNotification,
+} from "./notifications";
 import * as Notifications from "expo-notifications";
+import { db } from "./db";
 
 export type ThemeColors = typeof DarkColors;
 
@@ -293,26 +297,7 @@ function SplashOverlay({
 // ── Welcome push notification (Task 6) ───────────────────────
 async function maybeSendWelcomeNotification(lang: LangKey) {
   try {
-    const already = await AsyncStorage.getItem(WELCOME_NOTIF_KEY);
-    if (already === "true") return;
-
-    const isEn = lang !== "am";
-    const title = isEn
-      ? "Welcome to Saba App 🎵"
-      : "እንኳን ወደ ሳባ ወላይትኛ መዝሙሮች በደህና መጡ! 🎵";
-    const body = isEn ? "Enjoy your worship time!" : "መልካም የአምልኮ ጊዜ!";
-
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title,
-        body,
-        sound: "default",
-        data: { type: "welcome" },
-      },
-      trigger: null, // fire immediately
-    });
-
-    await AsyncStorage.setItem(WELCOME_NOTIF_KEY, "true");
+    await scheduleWelcomeNotification(lang);
   } catch (err) {
     console.error("Welcome notification error:", err);
   }
@@ -406,15 +391,13 @@ export function AppProvider({ children }: AppProviderProps) {
         const token = await getToken();
 
         // ── Task 1: Restore guest session ─────────────────
-        const guestActive = await AsyncStorage.getItem(GUEST_SESSION_KEY);
-        if (!token && guestActive === "true") {
-          const guestProfile: Profile = {
+        const guestActive = await db.session.getGuestSessionActive();
+        if (!token && guestActive) {
+          const guestProfile = {
             _id: "guest_persistent",
-            name: "Guest User",
-            singerName: "Guest",
             role: "worshiper",
-            email: "guest@saba.local",
-          };
+            name: "Guest",
+          } as Profile;
           if (mounted) setProfile(guestProfile);
         }
 
@@ -549,18 +532,16 @@ export function AppProvider({ children }: AppProviderProps) {
     try {
       await clearToken();
 
-      const guestProfile: Profile = {
+      const guestProfile = {
         _id: "guest_" + Date.now(),
-        name: "Guest User",
-        singerName: "Guest",
         role: "worshiper",
-        email: "guest@saba.local",
-      };
+        name: "Guest",
+      } as Profile;
       setProfile(guestProfile);
       await AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(guestProfile));
 
       // ── Task 1: Persist guest session ─────────────────────
-      await AsyncStorage.setItem(GUEST_SESSION_KEY, "true");
+      await db.session.setGuestSessionActive(true);
 
       // ── Task 6: Welcome notification ──────────────────────
       const currentLang =
@@ -577,7 +558,7 @@ export function AppProvider({ children }: AppProviderProps) {
     setProfile(null);
     await AsyncStorage.removeItem(PROFILE_KEY);
     // ── Task 1: Clear guest session so login screen shows ──
-    await AsyncStorage.removeItem(GUEST_SESSION_KEY);
+    await db.session.clearGuestSessionActive();
   }
 
   function toggleLang() {

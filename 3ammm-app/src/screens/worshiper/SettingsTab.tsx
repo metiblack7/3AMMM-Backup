@@ -22,7 +22,6 @@ import { apiFetch } from "../../lib/api";
 import { Spacing, Radius } from "../../theme";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-
 // ── TOGGLE ───────────────────────────────────────────────────
 interface ToggleProps {
   value: boolean;
@@ -305,7 +304,7 @@ export function SettingsTab() {
     color: C.text,
   };
 
-  const { appFontScale, setAppFontScale } = useApp();
+  const { appFontScale, setAppFontScale, fs } = useApp();
 
   return (
     <ScrollView
@@ -317,7 +316,7 @@ export function SettingsTab() {
         paddingBottom: 120,
       }}>
       {/* ── APPEARANCE ──────────────────────────── */}
-      <Text style={sectionTitle}>{t.appearance}</Text>
+      <Text style={[sectionTitle, { fontSize: fs(11) }]}>{t.appearance}</Text>
       <View style={card}>
         <View style={s.rowBetween}>
           <View style={s.rowLeft}>
@@ -327,7 +326,7 @@ export function SettingsTab() {
               color={C.sky}
             />
             <View>
-              <Text style={rowLabel}>{t.theme}</Text>
+              <Text style={[rowLabel, { fontSize: fs(15) }]}>{t.theme}</Text>
               <Text style={[s.subLabel, { color: C.text3 }]}>
                 {isDark ? t.darkMode : t.lightMode}
               </Text>
@@ -348,7 +347,7 @@ export function SettingsTab() {
               size={20}
               color={C.sky}
             />
-            <Text style={rowLabel}>{t.fontSize}</Text>
+            <Text style={[rowLabel, { fontSize: fs(15) }]}>{t.fontSize}</Text>
           </View>
           <View
             style={[
@@ -395,7 +394,7 @@ export function SettingsTab() {
       </View>
 
       {/* ── TEXT DISPLAY ────────────────────────── */}
-      <Text style={sectionTitle}>{t.textDisplay}</Text>
+      <Text style={[sectionTitle, { fontSize: fs(11) }]}>{t.textDisplay}</Text>
       <View style={card}>
         <View style={s.rowBetween}>
           <View style={s.rowLeft}>
@@ -404,7 +403,9 @@ export function SettingsTab() {
               size={20}
               color={C.sky}
             />
-            <Text style={rowLabel}>{t.lineSpacing}</Text>
+            <Text style={[rowLabel, { fontSize: fs(15) }]}>
+              {t.lineSpacing}
+            </Text>
           </View>
           <View
             style={[
@@ -437,14 +438,14 @@ export function SettingsTab() {
               size={20}
               color={C.sky}
             />
-            <Text style={rowLabel}>{t.boldLyrics}</Text>
+            <Text style={[rowLabel, { fontSize: fs(15) }]}>{t.boldLyrics}</Text>
           </View>
           <Toggle value={boldLyrics} onToggle={setBoldLyrics} />
         </View>
       </View>
 
       {/* ── LANGUAGE ────────────────────────────── */}
-      <Text style={sectionTitle}>{t.language}</Text>
+      <Text style={[sectionTitle, { fontSize: fs(11) }]}>{t.language}</Text>
       <View style={card}>
         <View style={s.pillRow}>
           {[
@@ -477,7 +478,9 @@ export function SettingsTab() {
       </View>
 
       {/* ── FEEDBACK ────────────────────────────── */}
-      <Text style={sectionTitle}>{t.feedbackComments}</Text>
+      <Text style={[sectionTitle, { fontSize: fs(11) }]}>
+        {t.feedbackComments}
+      </Text>
       <View style={card}>
         <View style={[s.rowLeft, { marginBottom: Spacing.md }]}>
           <MaterialCommunityIcons
@@ -643,7 +646,9 @@ export function SettingsTab() {
                 />
 
                 <View style={{ marginLeft: 8 }}>
-                  <Text style={rowLabel}>{item.label}</Text>
+                  <Text style={[rowLabel, { fontSize: fs(15) }]}>
+                    {item.label}
+                  </Text>
                   <Text style={[s.subLabel, { color: C.text3 }]}>
                     {item.sub}
                   </Text>
@@ -661,7 +666,7 @@ export function SettingsTab() {
       </View>
 
       {/* ── APP FONT SIZE (Task 5) ──────────────── */}
-      <Text style={sectionTitle}>App Font Size</Text>
+      <Text style={[sectionTitle, { fontSize: fs(11) }]}>App Font Size</Text>
       <View style={card}>
         <View style={s.pillRow}>
           {(["small", "medium", "large"] as const).map((scale) => {
@@ -681,7 +686,8 @@ export function SettingsTab() {
                   active && { backgroundColor: C.sky, borderColor: C.sky },
                 ]}
                 onPress={() => setAppFontScale(scale)}
-                activeOpacity={0.75}>
+                activeOpacity={0.75}
+                {...({ android_ripple: null } as any)}>
                 <Text
                   style={[
                     s.pillText,
@@ -702,7 +708,7 @@ export function SettingsTab() {
       </View>
 
       {/* ── APP UPDATES ─────────────────────────── */}
-      <Text style={sectionTitle}>{t.appUpdates}</Text>
+      <Text style={[sectionTitle, { fontSize: fs(11) }]}>{t.appUpdates}</Text>
       <View style={card}>
         <TouchableOpacity
           style={[s.rowBetween, { paddingVertical: Spacing.sm }]}
@@ -715,7 +721,9 @@ export function SettingsTab() {
               color={C.sky}
             />
             <View>
-              <Text style={rowLabel}>{t.checkForUpdates}</Text>
+              <Text style={[rowLabel, { fontSize: fs(15) }]}>
+                {t.checkForUpdates}
+              </Text>
               <Text style={[s.subLabel, { color: C.text3 }]}>
                 v{appVersion}
               </Text>
@@ -730,7 +738,7 @@ export function SettingsTab() {
       </View>
 
       {/* ── ACCOUNT ─────────────────────────────── */}
-      <Text style={sectionTitle}>{t.account}</Text>
+      <Text style={[sectionTitle, { fontSize: fs(11) }]}>{t.account}</Text>
       <View style={card}>
         <TouchableOpacity
           style={[

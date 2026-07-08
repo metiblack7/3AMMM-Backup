@@ -102,8 +102,17 @@ export default function SongSlideshowScreen({
   // ── Orientation + Navigation bar ─────────────────────────
   // ── Orientation + Navigation bar (Task 2) ─────────────────
   useEffect(() => {
+    const syncLayoutFromWindow = () => {
+      const nextDims = Dimensions.get("window");
+      setDims(nextDims);
+      setOrientation(
+        nextDims.width > nextDims.height ? "landscape" : "portrait",
+      );
+    };
+
     const setup = async () => {
-      // Unlock ALL orientations — let the device sensor decide
+      StatusBar.setHidden(true);
+
       try {
         await ScreenOrientation.lockAsync(
           ScreenOrientation.OrientationLock.ALL,
@@ -114,6 +123,8 @@ export default function SongSlideshowScreen({
         } catch {}
       }
 
+      syncLayoutFromWindow();
+
       if (Platform.OS === "android") {
         try {
           await NavigationBar.setVisibilityAsync("hidden");
@@ -122,10 +133,17 @@ export default function SongSlideshowScreen({
       }
     };
 
+    const orientationSub = ScreenOrientation.addOrientationChangeListener(
+      () => {
+        syncLayoutFromWindow();
+      },
+    );
+
     setup();
 
     return () => {
-      // Restore portrait on exit
+      orientationSub?.remove?.();
+      StatusBar.setHidden(false);
       ScreenOrientation.lockAsync(
         ScreenOrientation.OrientationLock.PORTRAIT_UP,
       ).catch(() => {});
@@ -134,7 +152,7 @@ export default function SongSlideshowScreen({
         NavigationBar.setVisibilityAsync("visible").catch(() => {});
       }
     };
-  }, []); // ← no dependency on `orientation` — runs once on mount/unmount
+  }, []);
 
   // ── Hardware back button ──────────────────────────────────
   useEffect(() => {

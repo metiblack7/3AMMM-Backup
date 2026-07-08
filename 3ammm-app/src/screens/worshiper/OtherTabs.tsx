@@ -54,66 +54,74 @@ function FavoriteSongCard({
   C: ReturnType<typeof useTheme>["C"];
   onOpenSong: (song: Song) => void;
 }) {
+  const { fs } = useApp();
   const [g1, g2] = isDark ? ["#082f41", "#00121e"] : ["#DFF5FF", "#F7FCFF"];
 
   return (
-    <TouchableOpacity
-      style={ss.songCardWrap}
-      onPress={() => onOpenSong(item)}
-      activeOpacity={0.75}>
-      <LinearGradient
-        colors={[g1, g2]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={[
-          ss.songCard,
-          { borderColor: isDark ? C.glassBorder : C.border },
-        ]}>
-        <View style={ss.songHeader}>
+    <View style={ss.songCardWrap}>
+      <TouchableOpacity
+        onPress={() => onOpenSong(item)}
+        activeOpacity={0.75}
+        {...({ android_ripple: null } as any)}>
+        <LinearGradient
+          colors={[g1, g2]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[
+            ss.songCard,
+            { borderColor: isDark ? C.glassBorder : C.border },
+          ]}>
+          <View style={ss.songHeader}>
+            <View
+              style={[
+                ss.artContainer,
+                {
+                  backgroundColor: isDark ? C.skyGlowSoft : C.skyPale,
+                  borderColor: C.skyBorder,
+                },
+              ]}>
+              <Feather name="music" size={20} color={isDark ? C.sky : C.navy} />
+            </View>
+
+            <View style={ss.songInfo}>
+              <Text style={[ss.songTitle, { color: C.text, fontSize: fs(15) }]}>
+                {item.title}
+              </Text>
+              <Text style={[ss.songMeta, { color: C.text2, fontSize: fs(12) }]}>
+                {item.singerName}
+              </Text>
+            </View>
+
+            <Feather name="chevron-right" size={18} color={C.text3} />
+          </View>
+
           <View
             style={[
-              ss.artContainer,
-              {
-                backgroundColor: isDark ? C.skyGlowSoft : C.skyPale,
-                borderColor: C.skyBorder,
-              },
+              ss.songFooter,
+              { borderTopColor: isDark ? C.glassBorder : C.border },
             ]}>
-            <Feather name="music" size={20} color={isDark ? C.sky : C.navy} />
-          </View>
-
-          <View style={ss.songInfo}>
-            <Text style={[ss.songTitle, { color: C.text }]}>{item.title}</Text>
-            <Text style={[ss.songMeta, { color: C.text2 }]}>
-              {item.singerName}
+            <Text style={[ss.songNumber, { color: C.text3, fontSize: fs(18) }]}>
+              {item.pageNumber}
             </Text>
+            <View
+              style={[
+                ss.keyChip,
+                { backgroundColor: C.goldDeep ?? C.skyPale },
+              ]}>
+              <Text style={[ss.keyChipText, { color: C.gold ?? C.sky }]}>
+                {item.key}
+              </Text>
+            </View>
           </View>
-
-          <Feather name="chevron-right" size={18} color={C.text3} />
-        </View>
-
-        <View
-          style={[
-            ss.songFooter,
-            { borderTopColor: isDark ? C.glassBorder : C.border },
-          ]}>
-          <Text style={[ss.songNumber, { color: C.text3 }]}>
-            {item.pageNumber}
-          </Text>
-          <View
-            style={[ss.keyChip, { backgroundColor: C.goldDeep ?? C.skyPale }]}>
-            <Text style={[ss.keyChipText, { color: C.gold ?? C.sky }]}>
-              {item.key}
-            </Text>
-          </View>
-        </View>
-      </LinearGradient>
-    </TouchableOpacity>
+        </LinearGradient>
+      </TouchableOpacity>
+    </View>
   );
 }
 
 // ── SETLISTS TAB ──────────────────────────────────────────────
 export function SetlistsTab({ onOpenSong }: SongProps) {
-  const { t } = useApp();
+  const { t, fs } = useApp();
   const { C } = useTheme();
   const insets = useSafeAreaInsets();
   const [setlists, setSetlists] = useState<LocalSetlist[]>([]);
@@ -186,9 +194,15 @@ export function SetlistsTab({ onOpenSong }: SongProps) {
       <View
         style={[
           s.headerBar,
-          { borderBottomColor: C.border, backgroundColor: C.bg },
+          {
+            borderBottomColor: C.border,
+            backgroundColor: C.bg,
+            paddingTop: TOP,
+          },
         ]}>
-        <Text style={[s.headerTitle, { color: C.text }]}>{t.setlists}</Text>
+        <Text style={[s.headerTitle, { color: C.text, fontSize: fs(16) }]}>
+          {t.setlists}
+        </Text>
       </View>
 
       {setlists.length === 0 ? (
@@ -235,7 +249,8 @@ export function SetlistsTab({ onOpenSong }: SongProps) {
                     ],
                   ]}
                   onPress={() => onOpenSong(song)}
-                  activeOpacity={0.75}>
+                  activeOpacity={0.75}
+                  {...({ android_ripple: null } as any)}>
                   <Text style={[s.songNum, { color: C.sky }]}>{i + 1}</Text>
                   <Text
                     style={[s.songName, { color: C.text, flex: 1 }]}
@@ -264,7 +279,7 @@ export function FavoritesTab({
   onBackToSongs,
   allSongs = [],
 }: SongProps) {
-  const { t, profile } = useApp();
+  const { t, profile, fs } = useApp();
   const { C, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const [songs, setSongs] = useState<Song[]>([]);
@@ -381,7 +396,9 @@ export function FavoritesTab({
             color={isDark ? "rgba(240,248,255,0.94)" : "#12344d"}
           />
         </TouchableOpacity>
-        <Text style={[ss.headerTitle, { color: C.text }]}>{t.favs}</Text>
+        <Text style={[ss.headerTitle, { color: C.text, fontSize: fs(15) }]}>
+          {t.favs}
+        </Text>
         <View style={{ width: 10 }} />
       </View>
 
@@ -413,9 +430,9 @@ export function FavoritesTab({
         showsVerticalScrollIndicator={false}
         overScrollMode="never"
         bounces={false}
+        scrollEventThrottle={0}
         contentContainerStyle={{
           paddingTop: 10,
-          paddingHorizontal: Spacing.lg,
           paddingBottom: 160,
         }}
         getItemLayout={getItemLayout}
@@ -431,7 +448,7 @@ export function FavoritesTab({
 
 // ── NOTIFICATIONS TAB ─────────────────────────────────────────
 export function NotificationsTab() {
-  const { t } = useApp();
+  const { t, fs } = useApp();
   const { C } = useTheme();
   const insets = useSafeAreaInsets();
   const [notifs, setNotifs] = useState<Notif[]>([]);
@@ -472,7 +489,9 @@ export function NotificationsTab() {
       contentContainerStyle={{ paddingTop: TOP, paddingBottom: 120 }}>
       <View style={[ns.hdr, { borderBottomColor: C.border }]}>
         <Feather name="bell" size={16} color={C.sky} />
-        <Text style={[ns.hdrText, { color: C.text }]}>{t.notifTitle}</Text>
+        <Text style={[ns.hdrText, { color: C.text, fontSize: fs(15) }]}>
+          {t.notifTitle}
+        </Text>
       </View>
 
       {notifs.length === 0 ? (

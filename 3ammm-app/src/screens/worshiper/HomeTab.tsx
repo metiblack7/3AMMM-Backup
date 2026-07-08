@@ -31,7 +31,7 @@ interface Props {
 
 function HomeTabComponent({ onOpenSong, onNavigateTab }: Props) {
   const insets = useSafeAreaInsets();
-  const { profile, t } = useApp();
+  const { profile, t, fs } = useApp();
   const { C, isDark } = useTheme();
 
   const [songs, setSongs] = useState<Song[]>([]);
@@ -150,9 +150,9 @@ function HomeTabComponent({ onOpenSong, onNavigateTab }: Props) {
           start={{ x: 0, y: 0 }}
           end={{ x: 0, y: 1 }}
           style={s.hero}>
-          <Text style={s.greet}>{t.greeting}</Text>
-          <Text style={s.name}>{homeTitle}</Text>
-          <Text style={s.verse}>{t.verse}</Text>
+          <Text style={[s.greet, { fontSize: fs(13) }]}>{t.greeting}</Text>
+          <Text style={[s.name, { fontSize: fs(32) }]}>{homeTitle}</Text>
+          <Text style={[s.verse, { fontSize: fs(12) }]}>{t.verse}</Text>
         </LinearGradient>
 
         {/* QUICK STATS */}
@@ -170,8 +170,12 @@ function HomeTabComponent({ onOpenSong, onNavigateTab }: Props) {
               <View style={s.cardIconBox}>
                 <Feather name="music" size={24} color={C.sky} />
               </View>
-              <Text style={s.cardNum}>{songs.length}</Text>
-              <Text style={s.cardLabel}>{t.allSongs}</Text>
+              <Text style={[s.cardNum, { fontSize: fs(28) }]}>
+                {songs.length}
+              </Text>
+              <Text style={[s.cardLabel, { fontSize: fs(12) }]}>
+                {t.allSongs}
+              </Text>
             </LinearGradient>
           </TouchableOpacity>
 
@@ -188,8 +192,10 @@ function HomeTabComponent({ onOpenSong, onNavigateTab }: Props) {
               <View style={s.cardIconBox}>
                 <Feather name="heart" size={24} color={C.sky} />
               </View>
-              <Text style={s.cardNum}>{favCount}</Text>
-              <Text style={s.cardLabel}>{t.myFavs}</Text>
+              <Text style={[s.cardNum, { fontSize: fs(28) }]}>{favCount}</Text>
+              <Text style={[s.cardLabel, { fontSize: fs(12) }]}>
+                {t.myFavs}
+              </Text>
             </LinearGradient>
           </TouchableOpacity>
         </View>
@@ -199,7 +205,9 @@ function HomeTabComponent({ onOpenSong, onNavigateTab }: Props) {
           <>
             <View style={s.secHdr}>
               <Feather name="calendar" size={18} color={C.sky} />
-              <Text style={s.secTitle}>{t.nextSat}</Text>
+              <Text style={[s.secTitle, { fontSize: fs(16) }]}>
+                {t.nextSat}
+              </Text>
             </View>
 
             <View style={s.nextSlCardWrap}>
@@ -223,7 +231,9 @@ function HomeTabComponent({ onOpenSong, onNavigateTab }: Props) {
                     </Text>
                   </View>
 
-                  <Text style={s.slTheme} numberOfLines={1}>
+                  <Text
+                    style={[s.slTheme, { fontSize: fs(15) }]}
+                    numberOfLines={1}>
                     {nextSetlist.title}
                   </Text>
 
@@ -242,10 +252,15 @@ function HomeTabComponent({ onOpenSong, onNavigateTab }: Props) {
                       i < nextSongs.length - 1 && s.slSongBorder,
                     ]}
                     onPress={() => onOpenSong(song)}
-                    activeOpacity={0.7}>
-                    <Text style={[s.slNum, { color: C.sky }]}>{i + 1}</Text>
+                    activeOpacity={0.7}
+                    {...({ android_ripple: null } as any)}>
+                    <Text style={[s.slNum, { color: C.sky, fontSize: fs(12) }]}>
+                      {i + 1}
+                    </Text>
                     <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text style={s.slName} numberOfLines={1}>
+                      <Text
+                        style={[s.slName, { fontSize: fs(14) }]}
+                        numberOfLines={1}>
                         {song.title}
                       </Text>
                       <Text style={s.slSinger} numberOfLines={1}>

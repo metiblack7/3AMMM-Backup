@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const DB_PREFIX = '3ammm_db_';
+const GUEST_SESSION_KEY = 'guest_session_active';
 
 export interface LyricSection {
   s: string; // section name e.g. "ቁጥር 1"
@@ -33,6 +34,33 @@ export interface Setlist {
 }
 
 export const db = {
+  session: {
+    async getGuestSessionActive(): Promise<boolean> {
+      try {
+        return (await AsyncStorage.getItem(GUEST_SESSION_KEY)) === 'true';
+      } catch (err) {
+        console.error('DB Error (session.getGuestSessionActive):', err);
+        return false;
+      }
+    },
+
+    async setGuestSessionActive(active: boolean): Promise<void> {
+      try {
+        await AsyncStorage.setItem(GUEST_SESSION_KEY, active ? 'true' : 'false');
+      } catch (err) {
+        console.error('DB Error (session.setGuestSessionActive):', err);
+      }
+    },
+
+    async clearGuestSessionActive(): Promise<void> {
+      try {
+        await AsyncStorage.removeItem(GUEST_SESSION_KEY);
+      } catch (err) {
+        console.error('DB Error (session.clearGuestSessionActive):', err);
+      }
+    },
+  },
+
   songs: {
     async getAll(): Promise<Song[]> {
       try {

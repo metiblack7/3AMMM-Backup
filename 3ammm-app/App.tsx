@@ -12,10 +12,36 @@ import {
   registerForPushNotificationsOnSignUp,
   setupNotificationListeners,
 } from "./src/lib/notifications";
+import { db } from "./src/lib/db";
 
 function RootRouter() {
   const { profile, loading, isAdmin } = useApp();
   const [showRegister, setShowRegister] = useState(false);
+  const [guestSessionResolved, setGuestSessionResolved] = useState(false);
+  const [guestSessionActive, setGuestSessionActive] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    db.session
+      .getGuestSessionActive()
+      .then((value) => {
+        if (!cancelled) {
+          setGuestSessionActive(value);
+          setGuestSessionResolved(true);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setGuestSessionActive(false);
+          setGuestSessionResolved(true);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Push notifications setup
   useEffect(() => {
@@ -26,7 +52,7 @@ function RootRouter() {
     }
   }, [profile]);
 
-  if (loading) {
+  if (loading || !guestSessionResolved) {
     return (
       <View
         style={{
@@ -41,7 +67,7 @@ function RootRouter() {
   }
 
   // ✅ FIX: use profile directly (not isAuthenticated)
-  if (!profile) {
+  if (!profile && !guestSessionActive) {
     if (showRegister)
       return <RegisterScreen onGoLogin={() => setShowRegister(false)} />;
     return <LoginScreen onGoRegister={() => setShowRegister(true)} />;
@@ -60,9 +86,6 @@ function App() {
       </AppProvider>
     </SafeAreaProvider>
   );
-
-
-
 }
 
 export default App;
