@@ -19,7 +19,7 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.saba.worship",
+      "bundleIdentifier": "com.ammm.worship",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }

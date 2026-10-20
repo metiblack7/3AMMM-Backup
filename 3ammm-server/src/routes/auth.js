@@ -3,10 +3,17 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const { protect } = require('../middleware/auth');
 
+const jwtSecret = process.env.JWT_SECRET;
+if (!jwtSecret) {
+  throw new Error(
+    "FATAL: JWT_SECRET is not configured. Server cannot start."
+  );
+}
+
 const router = express.Router();
 
 function signToken(id) {
-  return jwt.sign({ id }, process.env.JWT_SECRET, {
+  return jwt.sign({ id }, jwtSecret, {
     expiresIn: process.env.JWT_EXPIRES_IN || '30d',
   });
 }
@@ -16,7 +23,18 @@ router.post('/register', async (req, res) => {
   try {
     const { name, email, password, singerName } = req.body;
     if (!name || !email || !password) {
-      return res.status(400).json({ message: 'Name, email and password are required.' });
+      return res.status(400).json({
+        message: "Name, email and password are required.",
+      });
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ message: "Invalid email format." });
+    }
+    if (password.length < 8) {
+      return res.status(400).json({
+        message: "Password must be at least 8 characters.",
+      });
     }
 
     const existing = await User.findOne({ email });

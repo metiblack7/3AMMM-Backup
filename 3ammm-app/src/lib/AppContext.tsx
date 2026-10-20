@@ -17,7 +17,13 @@ import {
 } from "react-native";
 import { BlurView } from "expo-blur";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { api, saveToken, getToken, clearToken } from "./api";
+import {
+  api,
+  saveToken,
+  getToken,
+  clearToken,
+  setUnauthorizedHandler,
+} from "./api";
 import {
   useGoogleAuth,
   fetchGoogleUserInfo,

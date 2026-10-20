@@ -139,48 +139,47 @@ export default function WorshiperApp() {
       />
 
       <View style={[styles.content, { paddingBottom: contentBottomPad }]}>
-        {TABS.map((tab, index) => (
-          <Animated.View
-            key={tab.key}
-            style={[
-              styles.tabLayer,
-              {
-                opacity: tabOpacity[index],
-                transform: [{ translateY: tabTranslate[index] }],
-              },
-              activeTab !== tab.key && styles.tabBehind,
-            ]}>
-            {tab.key === "home" && (
-              <HomeTab
-                onOpenSong={openSong}
-                onNavigateTab={(nextTab) => {
-                  const idx = TABS.findIndex((t) => t.key === nextTab);
-                  if (idx !== -1) handleTabPress(nextTab, idx);
-                }}
-              />
-            )}
-
-            {tab.key === "songs" && (
-              <SongsTab
-                onOpenSong={openSong}
-                scrollOffsetRef={songsScrollOffset}
-                onSongsLoaded={setAllSongs}
-              />
-            )}
-
-            {tab.key === "setlists" && <SetlistsTab onOpenSong={openSong} />}
-
-            {tab.key === "favs" && (
-              <FavoritesTab
-                onOpenSong={openSong}
-                onBackToSongs={() => handleTabPress("songs", 1)}
-                allSongs={allSongs}
-              />
-            )}
-
-            {tab.key === "settings" && <SettingsTab />}
-          </Animated.View>
-        ))}
+        <View style={{ flex: 1 }}>
+          {TABS.map((tab, index) => {
+            const isActive = activeTab === tab.key;
+            return (
+              <Animated.View
+                key={tab.key}
+                pointerEvents={isActive ? "auto" : "none"}
+                style={[
+                  styles.tabLayer,
+                  {
+                    opacity: tabOpacity[index],
+                    transform: [{ translateY: tabTranslate[index] }],
+                    zIndex: isActive ? 2 : 1,
+                  },
+                ]}>
+                {tab.key === "home" && (
+                  <HomeTab
+                    onOpenSong={openSong}
+                    onNavigateTab={(nextTab) => {
+                      const nextIndex = TABS.findIndex(
+                        (t) => t.key === nextTab,
+                      );
+                      if (nextIndex !== -1) handleTabPress(nextTab, nextIndex);
+                    }}
+                  />
+                )}
+                {tab.key === "songs" && (
+                  <SongsTab
+                    onOpenSong={openSong}
+                    scrollOffsetRef={songsScrollOffset}
+                  />
+                )}
+                {tab.key === "setlists" && (
+                  <SetlistsTab onOpenSong={openSong} />
+                )}
+                {tab.key === "favs" && <FavoritesTab onOpenSong={openSong} />}
+                {tab.key === "settings" && <SettingsTab />}
+              </Animated.View>
+            );
+          })}
+        </View>
       </View>
 
       {/* ── TAB BAR ───────────────────────────────────────────── */}

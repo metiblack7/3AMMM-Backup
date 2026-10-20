@@ -1,4 +1,5 @@
 const express = require('express');
+const mongoose = require("mongoose");
 const Song = require('../models/Song');
 const { protect, adminOnly } = require('../middleware/auth');
 
@@ -61,6 +62,9 @@ router.get('/singers', async (req, res) => {
 });
 
 router.get('/:id', async (req, res) => {
+  if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+    return res.status(400).json({ message: "Invalid song id." });
+  }
   try {
     const song = await Song.findById(req.params.id);
     if (!song) return res.status(404).json({ message: 'Song not found.' });
@@ -80,11 +84,21 @@ router.post('/', protect, adminOnly, async (req, res) => {
 });
 
 router.put('/:id', protect, adminOnly, async (req, res) => {
+  if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+    return res.status(400).json({ message: "Invalid song id." });
+  }
   try {
-    const song = await Song.findByIdAndUpdate(req.params.id, req.body, {
-      new: true,
-      runValidators: true,
-    });
+    const allowed = ["title", "key", "tempo", "singerName", "category", "lyrics"];
+    const payload = {};
+    for (const key of allowed) {
+      if (req.body[key] !== undefined) payload[key] = req.body[key];
+    }
+
+    const song = await Song.findByIdAndUpdate(
+      req.params.id,
+      payload,
+      { new: true, runValidators: true }
+    );
     if (!song) return res.status(404).json({ message: 'Song not found.' });
     res.json(song);
   } catch (err) {
@@ -93,6 +107,9 @@ router.put('/:id', protect, adminOnly, async (req, res) => {
 });
 
 router.delete('/:id', protect, adminOnly, async (req, res) => {
+  if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+    return res.status(400).json({ message: "Invalid song id." });
+  }
   try {
     const song = await Song.findByIdAndDelete(req.params.id);
     if (!song) return res.status(404).json({ message: 'Song not found.' });

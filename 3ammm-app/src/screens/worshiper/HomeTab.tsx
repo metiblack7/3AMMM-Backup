@@ -19,9 +19,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 interface Setlist {
   _id: string;
-  title: string;
-  date: string;
-  songIds: Song[];
+  title?: string;
+  date?: string;
+  songIds?: Array<Song | string | null | undefined>;
 }
 
 interface Props {
@@ -40,31 +40,60 @@ function HomeTabComponent({ onOpenSong, onNavigateTab }: Props) {
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
+    const { db } = await import("../../lib/db");
+
     try {
-      // Fetch songs and setlists normally. For favorites count, prefer
-      // local cached favorites for guests/offline; for authenticated
-      // users attempt server, but fall back to local on error.
+      const cachedSongs = await db.songs.getAll();
+      const cachedSetlists = await db.setlists.getAll();
+      if (cachedSongs.length > 0 || cachedSetlists.length > 0) {
+        setSongs(cachedSongs);
+        setSetlists(
+          (cachedSetlists || []).map((item: any) => ({
+            _id: String(item?._id ?? item?.id ?? ""),
+            title: item?.title ?? item?.name ?? "Untitled",
+            date: item?.date ?? "",
+            songIds: Array.isArray(item?.songIds)
+              ? item.songIds
+              : Array.isArray(item?.songs)
+                ? item.songs
+                : [],
+          })),
+        );
+      }
+    } catch {
+      // ignore cached-read errors and continue to remote fetch
+    }
+
+    try {
       const [songsData, setlistsData] = await Promise.all([
-        api.songs.getAll().catch(async () => {
-          // fallback to cache when server unreachable
-          return await (await import("../../lib/db")).db.songs.getAll();
-        }),
-        api.setlists.getAll().catch(async () => {
-          return await (await import("../../lib/db")).db.setlists.getAll();
-        }),
+        api.songs.getAll().catch(() => []),
+        api.setlists.getAll().catch(() => []),
       ]);
 
-      setSongs(songsData);
-      setSetlists(setlistsData);
+      if (Array.isArray(songsData) && songsData.length > 0) {
+        setSongs(songsData);
+        try {
+          await db.songs.save(songsData as any);
+        } catch {
+          // ignore cache write failures
+        }
+      }
+
+      if (Array.isArray(setlistsData) && setlistsData.length > 0) {
+        setSetlists(setlistsData);
+        try {
+          await db.setlists.save(setlistsData as any);
+        } catch {
+          // ignore cache write failures
+        }
+      }
 
       // favorites count: prefer local cache for guests/offline; otherwise use server
       const isGuest =
         !!profile && String(profile._id || "").startsWith("guest_");
 
       if (isGuest || !profile) {
-        const localFavs = await (
-          await import("../../lib/db")
-        ).db.favorites.getAll();
+        const localFavs = await db.favorites.getAll();
         setFavCount(localFavs.length);
       } else {
         try {
@@ -75,16 +104,14 @@ function HomeTabComponent({ onOpenSong, onNavigateTab }: Props) {
               : (favIds?.ids ?? []).length || 0,
           );
         } catch (err) {
-          const localFavs = await (
-            await import("../../lib/db")
-          ).db.favorites.getAll();
+          const localFavs = await db.favorites.getAll();
           setFavCount(localFavs.length);
         }
       }
     } catch (err) {
       console.error(err);
     }
-  }, []);
+  }, [profile]);
 
   useEffect(() => {
     load();
