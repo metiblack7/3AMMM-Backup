@@ -21,8 +21,6 @@ import { Spacing } from "../../theme";
 
 type AdminTab = "songs" | "setlists" | "members";
 
-const dashboardMemory: { activeTab: AdminTab } = { activeTab: "songs" };
-
 function StatCard({
   value,
   label,
@@ -35,8 +33,12 @@ function StatCard({
   C: any;
 }) {
   return (
-    <View style={[styles.statCard, { backgroundColor: C.surface, borderColor: C.border }]}> 
-      <View style={[styles.statIcon, { backgroundColor: C.skyPale }]}> 
+    <View
+      style={[
+        styles.statCard,
+        { backgroundColor: C.surface, borderColor: C.border },
+      ]}>
+      <View style={[styles.statIcon, { backgroundColor: C.skyPale }]}>
         <Feather name={icon as any} size={16} color={C.sky} />
       </View>
       <View>
@@ -53,7 +55,7 @@ export default function AdminDashboard() {
   const { profile, t, toggleLang, lang, signOut } = useApp();
   const { C, isDark } = useTheme();
 
-  const [activeTab, setActiveTab] = useState<AdminTab>(dashboardMemory.activeTab);
+  const [activeTab, setActiveTab] = useState<AdminTab>("songs");
   const [stats, setStats] = useState({
     totalSongs: 0,
     totalWorshipers: 0,
@@ -116,7 +118,8 @@ export default function AdminDashboard() {
   });
 
   const langLabel = lang === "en" ? "አማ" : "EN";
-  const topInset = Platform.OS === "ios" ? 56 : (StatusBar.currentHeight ?? 24) + 8;
+  const topInset =
+    Platform.OS === "ios" ? 56 : (StatusBar.currentHeight ?? 24) + 8;
 
   const tabs: { key: AdminTab; label: string; icon: string }[] = [
     { key: "songs", label: t.songs, icon: "music" },
@@ -126,78 +129,176 @@ export default function AdminDashboard() {
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
-      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor="transparent" translucent />
+      <StatusBar
+        barStyle={isDark ? "light-content" : "dark-content"}
+        backgroundColor="transparent"
+        translucent
+      />
 
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: 22 }}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.sky} />}
-      >
-        <View style={[styles.header, { paddingTop: topInset, backgroundColor: C.bg }]}> 
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={C.sky}
+          />
+        }>
+        <View
+          style={[
+            styles.header,
+            { paddingTop: topInset, backgroundColor: C.bg },
+          ]}>
           <View style={styles.headerText}>
             <Text style={[styles.title, { color: C.text }]}>{t.appName}</Text>
-            <Text style={[styles.subtitle, { color: C.text2 }]}>{t.adminDash ?? "Admin Dashboard"}</Text>
+            <Text style={[styles.subtitle, { color: C.text2 }]}>
+              {t.adminDash ?? "Admin Dashboard"}
+            </Text>
           </View>
 
           <View style={styles.headerControls}>
-            <TouchableOpacity onPress={toggleLang} style={[styles.langChip, { borderColor: C.sky }]} activeOpacity={0.85}>
-              <Text style={[styles.langChipText, { color: C.sky }]}>{langLabel}</Text>
+            <TouchableOpacity
+              onPress={toggleLang}
+              style={[styles.langChip, { borderColor: C.sky }]}
+              activeOpacity={0.85}>
+              <Text style={[styles.langChipText, { color: C.sky }]}>
+                {langLabel}
+              </Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={onRefresh} style={[styles.iconChip, { borderColor: C.border }]} activeOpacity={0.85}>
+            <TouchableOpacity
+              onPress={onRefresh}
+              style={[styles.iconChip, { borderColor: C.border }]}
+              activeOpacity={0.85}>
               <Feather name="refresh-cw" size={18} color={C.sky} />
             </TouchableOpacity>
-            <TouchableOpacity onPress={signOut} style={[styles.avatar, { backgroundColor: C.sky }]} activeOpacity={0.85}>
+            <TouchableOpacity
+              onPress={signOut}
+              style={[styles.avatar, { backgroundColor: C.sky }]}
+              activeOpacity={0.85}>
               <Text style={[styles.avatarText, { color: C.bg }]}>
-                {(profile?.name ?? "A").split(" ").map((part: string) => part[0]).join("").slice(0, 2).toUpperCase()}
+                {(profile?.name ?? "A")
+                  .split(" ")
+                  .map((part: string) => part[0])
+                  .join("")
+                  .slice(0, 2)
+                  .toUpperCase()}
               </Text>
             </TouchableOpacity>
           </View>
         </View>
 
-        <View style={[styles.statsContainer, { backgroundColor: C.surface, borderColor: C.border }]}> 
-          <StatCard value={stats.totalSongs} label={t.totalSongs ?? "Songs"} icon="music" C={C} />
-          <StatCard value={stats.totalWorshipers} label={t.totalWorshipers ?? "Worshipers"} icon="users" C={C} />
-          <StatCard value={stats.totalSingers} label={t.totalSingers ?? "Singers"} icon="mic" C={C} />
-          <StatCard value={stats.totalSetlists} label={t.totalSetlists ?? "Setlists"} icon="calendar" C={C} />
+        <View
+          style={[
+            styles.statsContainer,
+            { backgroundColor: C.surface, borderColor: C.border },
+          ]}>
+          <StatCard
+            value={stats.totalSongs}
+            label={t.totalSongs ?? "Songs"}
+            icon="music"
+            C={C}
+          />
+          <StatCard
+            value={stats.totalWorshipers}
+            label={t.totalWorshipers ?? "Worshipers"}
+            icon="users"
+            C={C}
+          />
+          <StatCard
+            value={stats.totalSingers}
+            label={t.totalSingers ?? "Singers"}
+            icon="mic"
+            C={C}
+          />
+          <StatCard
+            value={stats.totalSetlists}
+            label={t.totalSetlists ?? "Setlists"}
+            icon="calendar"
+            C={C}
+          />
         </View>
 
-        <View style={[styles.segmentControl, { backgroundColor: C.surface, borderColor: C.border }]}> 
+        <View
+          style={[
+            styles.segmentControl,
+            { backgroundColor: C.surface, borderColor: C.border },
+          ]}>
           {tabs.map((tab) => {
             const active = activeTab === tab.key;
             return (
               <TouchableOpacity
                 key={tab.key}
                 onPress={() => {
-                  dashboardMemory.activeTab = tab.key;
                   setActiveTab(tab.key);
                 }}
                 activeOpacity={0.85}
-                style={[styles.tabButton, active && { backgroundColor: C.sky, shadowColor: C.sky, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.22, shadowRadius: 7, elevation: 3 }]}
-              >
-                <Feather name={tab.icon as any} size={14} color={active ? C.bg : C.text3} />
-                <Text style={[styles.tabText, active ? { color: C.bg, fontWeight: "700" } : { color: C.text3 }]}>{tab.label}</Text>
+                style={[
+                  styles.tabButton,
+                  active && {
+                    backgroundColor: C.sky,
+                    shadowColor: C.sky,
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.22,
+                    shadowRadius: 7,
+                    elevation: 3,
+                  },
+                ]}>
+                <Feather
+                  name={tab.icon as any}
+                  size={14}
+                  color={active ? C.bg : C.text3}
+                />
+                <Text
+                  style={[
+                    styles.tabText,
+                    active
+                      ? { color: C.bg, fontWeight: "700" }
+                      : { color: C.text3 },
+                  ]}>
+                  {tab.label}
+                </Text>
               </TouchableOpacity>
             );
           })}
         </View>
 
-        <View style={styles.tabPanel}> 
-          <View style={activeTab !== "songs" ? styles.hidden : undefined}><AdminSongsTab /></View>
-          <View style={activeTab !== "setlists" ? styles.hidden : undefined}><AdminSetlistsTab /></View>
-          <View style={activeTab !== "members" ? styles.hidden : undefined}> 
+        <View style={styles.tabPanel}>
+          <View style={activeTab !== "songs" ? styles.hidden : undefined}>
+            <AdminSongsTab />
+          </View>
+          <View style={activeTab !== "setlists" ? styles.hidden : undefined}>
+            <AdminSetlistsTab />
+          </View>
+          <View style={activeTab !== "members" ? styles.hidden : undefined}>
             <View style={styles.membersSection}>
-              <View style={[styles.membersHeader, { backgroundColor: C.surface, borderColor: C.border }]}> 
+              <View
+                style={[
+                  styles.membersHeader,
+                  { backgroundColor: C.surface, borderColor: C.border },
+                ]}>
                 <View>
-                  <Text style={[styles.membersTitle, { color: C.text }]}>{t.members ?? "Members"}</Text>
-                  <Text style={[styles.membersSubtitle, { color: C.text2 }]}>{t.manageMembers ?? "Review and manage accounts."}</Text>
+                  <Text style={[styles.membersTitle, { color: C.text }]}>
+                    {t.members ?? "Members"}
+                  </Text>
+                  <Text style={[styles.membersSubtitle, { color: C.text2 }]}>
+                    {t.manageMembers ?? "Review and manage accounts."}
+                  </Text>
                 </View>
-                <View style={[styles.membersBadge, { backgroundColor: C.skyPale }]}> 
-                  <Text style={[styles.membersBadgeText, { color: C.sky }]}>{filteredMembers.length}</Text>
+                <View
+                  style={[styles.membersBadge, { backgroundColor: C.skyPale }]}>
+                  <Text style={[styles.membersBadgeText, { color: C.sky }]}>
+                    {filteredMembers.length}
+                  </Text>
                 </View>
               </View>
 
-              <View style={[styles.searchRow, { backgroundColor: C.bg, borderColor: C.border }]}> 
+              <View
+                style={[
+                  styles.searchRow,
+                  { backgroundColor: C.bg, borderColor: C.border },
+                ]}>
                 <Feather name="search" size={16} color={C.text3} />
                 <TextInput
                   style={[styles.searchInput, { color: C.text }]}
@@ -216,25 +317,69 @@ export default function AdminDashboard() {
               {loadingMembers ? (
                 <Loader />
               ) : filteredMembers.length === 0 ? (
-                <View style={styles.emptyState}> 
+                <View style={styles.emptyState}>
                   <Feather name="users" size={28} color={C.text3} />
-                  <Text style={[styles.emptyText, { color: C.text3 }]}>{memberQuery ? "No members match." : "No members yet."}</Text>
+                  <Text style={[styles.emptyText, { color: C.text3 }]}>
+                    {memberQuery ? "No members match." : "No members yet."}
+                  </Text>
                 </View>
               ) : (
-                <View style={styles.memberList}> 
+                <View style={styles.memberList}>
                   {filteredMembers.map((member) => {
                     const isAdmin = member.role === "admin";
                     return (
-                      <View key={member._id} style={[styles.memberItem, { backgroundColor: C.surface, borderColor: C.border }]}> 
-                        <View style={[styles.memberAvatar, { backgroundColor: isAdmin ? C.sky : C.bg, borderColor: C.border }]}> 
-                          <Text style={[styles.memberAvatarText, { color: isAdmin ? C.bg : C.text2 }]}>{member.name.split(" ").map((piece: string) => piece[0]).join("").slice(0, 2).toUpperCase()}</Text>
+                      <View
+                        key={member._id}
+                        style={[
+                          styles.memberItem,
+                          { backgroundColor: C.surface, borderColor: C.border },
+                        ]}>
+                        <View
+                          style={[
+                            styles.memberAvatar,
+                            {
+                              backgroundColor: isAdmin ? C.sky : C.bg,
+                              borderColor: C.border,
+                            },
+                          ]}>
+                          <Text
+                            style={[
+                              styles.memberAvatarText,
+                              { color: isAdmin ? C.bg : C.text2 },
+                            ]}>
+                            {member.name
+                              .split(" ")
+                              .map((piece: string) => piece[0])
+                              .join("")
+                              .slice(0, 2)
+                              .toUpperCase()}
+                          </Text>
                         </View>
-                        <View style={styles.memberDetails}> 
-                          <Text style={[styles.memberName, { color: C.text }]}>{member.name}</Text>
-                          <Text style={[styles.memberEmail, { color: C.text2 }]} numberOfLines={1}>{member.email}</Text>
+                        <View style={styles.memberDetails}>
+                          <Text style={[styles.memberName, { color: C.text }]}>
+                            {member.name}
+                          </Text>
+                          <Text
+                            style={[styles.memberEmail, { color: C.text2 }]}
+                            numberOfLines={1}>
+                            {member.email}
+                          </Text>
                         </View>
-                        <View style={[styles.roleTag, { backgroundColor: isAdmin ? C.skyPale : C.surface, borderColor: C.border }]}> 
-                          <Text style={[styles.roleText, { color: isAdmin ? C.sky : C.text3 }]}>{isAdmin ? "ADMIN" : "USER"}</Text>
+                        <View
+                          style={[
+                            styles.roleTag,
+                            {
+                              backgroundColor: isAdmin ? C.skyPale : C.surface,
+                              borderColor: C.border,
+                            },
+                          ]}>
+                          <Text
+                            style={[
+                              styles.roleText,
+                              { color: isAdmin ? C.sky : C.text3 },
+                            ]}>
+                            {isAdmin ? "ADMIN" : "USER"}
+                          </Text>
                         </View>
                       </View>
                     );

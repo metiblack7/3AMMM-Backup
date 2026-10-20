@@ -17,7 +17,13 @@ import {
 } from "react-native";
 import { BlurView } from "expo-blur";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { api, saveToken, getToken, clearToken } from "./api";
+import {
+  api,
+  saveToken,
+  getToken,
+  clearToken,
+  setUnauthorizedHandler,
+} from "./api";
 import {
   useGoogleAuth,
   fetchGoogleUserInfo,
@@ -396,6 +402,15 @@ export function AppProvider({ children }: AppProviderProps) {
   }, [googleResponse]);
 
   // ── App initialisation ────────────────────────────────────
+  useEffect(() => {
+    setUnauthorizedHandler(() => {
+      clearToken().catch(() => {});
+      AsyncStorage.removeItem(PROFILE_KEY).catch(() => {});
+      setProfile(null);
+      setAuthError("Your session expired. Please sign in again.");
+    });
+  }, []);
+
   useEffect(() => {
     let mounted = true;
 

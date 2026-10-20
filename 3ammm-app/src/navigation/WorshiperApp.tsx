@@ -139,48 +139,33 @@ export default function WorshiperApp() {
       />
 
       <View style={[styles.content, { paddingBottom: contentBottomPad }]}>
-        {TABS.map((tab, index) => (
-          <Animated.View
-            key={tab.key}
-            style={[
-              styles.tabLayer,
-              {
-                opacity: tabOpacity[index],
-                transform: [{ translateY: tabTranslate[index] }],
-              },
-              activeTab !== tab.key && styles.tabBehind,
-            ]}>
-            {tab.key === "home" && (
-              <HomeTab
-                onOpenSong={openSong}
-                onNavigateTab={(nextTab) => {
-                  const idx = TABS.findIndex((t) => t.key === nextTab);
-                  if (idx !== -1) handleTabPress(nextTab, idx);
-                }}
-              />
-            )}
-
-            {tab.key === "songs" && (
-              <SongsTab
-                onOpenSong={openSong}
-                scrollOffsetRef={songsScrollOffset}
-                onSongsLoaded={setAllSongs}
-              />
-            )}
-
-            {tab.key === "setlists" && <SetlistsTab onOpenSong={openSong} />}
-
-            {tab.key === "favs" && (
-              <FavoritesTab
-                onOpenSong={openSong}
-                onBackToSongs={() => handleTabPress("songs", 1)}
-                allSongs={allSongs}
-              />
-            )}
-
-            {tab.key === "settings" && <SettingsTab />}
-          </Animated.View>
-        ))}
+        <View style={{ flex: 1 }}>
+          {activeTab === "home" && (
+            <HomeTab
+              onOpenSong={openSong}
+              onNavigateTab={(nextTab) => {
+                const idx = TABS.findIndex((t) => t.key === nextTab);
+                if (idx !== -1) handleTabPress(nextTab, idx);
+              }}
+            />
+          )}
+          {activeTab === "songs" && (
+            <SongsTab
+              onOpenSong={openSong}
+              scrollOffsetRef={songsScrollOffset}
+              onSongsLoaded={setAllSongs}
+            />
+          )}
+          {activeTab === "setlists" && <SetlistsTab onOpenSong={openSong} />}
+          {activeTab === "favs" && (
+            <FavoritesTab
+              onOpenSong={openSong}
+              onBackToSongs={() => handleTabPress("songs", 1)}
+              allSongs={allSongs}
+            />
+          )}
+          {activeTab === "settings" && <SettingsTab />}
+        </View>
       </View>
 
       {/* ── TAB BAR ───────────────────────────────────────────── */}
