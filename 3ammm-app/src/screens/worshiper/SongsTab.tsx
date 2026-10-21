@@ -148,7 +148,11 @@ const AnimatedSongCard = React.memo(function AnimatedSongCard({
               <Text style={[ss.songTitle, { color: C.text, fontSize: fs(15) }]}>
                 {item.title}
               </Text>
-              <Text style={[ss.songMeta, { color: C.text2, flexShrink: 1, fontSize: fs(12) }]}>
+              <Text
+                style={[
+                  ss.songMeta,
+                  { color: C.text2, flexShrink: 1, fontSize: fs(12) },
+                ]}>
                 {item.singerName}
               </Text>
             </View>
@@ -165,7 +169,8 @@ const AnimatedSongCard = React.memo(function AnimatedSongCard({
               {item.pageNumber}
             </Text>
             <View style={[ss.keyChip, { backgroundColor: C.goldDeep }]}>
-              <Text style={[ss.keyChipText, { color: C.gold, fontSize: fs(11) }]}>
+              <Text
+                style={[ss.keyChipText, { color: C.gold, fontSize: fs(11) }]}>
                 {item.key}
               </Text>
             </View>

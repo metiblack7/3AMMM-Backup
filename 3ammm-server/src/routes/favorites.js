@@ -10,19 +10,9 @@ const notifRouter = express.Router();
 // ── FAVORITES ──────────────────────────────────────────────────
 
 // GET /api/favorites — user's favorite songs (populated)
-favRouter.get('/', async (req, res) => {
+favRouter.get('/', protect, async (req, res) => {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      // Not authenticated — return empty favorites for guest
-      return res.json([]);
-    }
-    const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.id);
-    if (!user) return res.json([]);
-
-    const favs = await Favorite.find({ userId: user._id }).populate('songId');
+    const favs = await Favorite.find({ userId: req.user._id }).populate('songId');
     const songs = favs.map(f => f.songId).filter(Boolean);
     res.json(songs);
   } catch (err) {
@@ -31,18 +21,9 @@ favRouter.get('/', async (req, res) => {
 });
 
 // GET /api/favorites/ids — just the song IDs (for checking if song is fav)
-favRouter.get('/ids', async (req, res) => {
+favRouter.get('/ids', protect, async (req, res) => {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.json([]);
-    }
-    const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.id);
-    if (!user) return res.json([]);
-
-    const favs = await Favorite.find({ userId: user._id }).select('songId');
+    const favs = await Favorite.find({ userId: req.user._id }).select('songId');
     res.json(favs.map(f => f.songId.toString()));
   } catch (err) {
     res.status(500).json({ message: err.message });

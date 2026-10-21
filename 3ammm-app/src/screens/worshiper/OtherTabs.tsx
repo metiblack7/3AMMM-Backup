@@ -83,7 +83,9 @@ function FavoriteSongCard({
           </View>
 
           <View style={ss.songInfo}>
-            <Text style={[ss.songTitle, { color: C.text, fontSize: fs(15) }]}>{item.title}</Text>
+            <Text style={[ss.songTitle, { color: C.text, fontSize: fs(15) }]}>
+              {item.title}
+            </Text>
             <Text style={[ss.songMeta, { color: C.text2, fontSize: fs(12) }]}>
               {item.singerName}
             </Text>
@@ -102,7 +104,11 @@ function FavoriteSongCard({
           </Text>
           <View
             style={[ss.keyChip, { backgroundColor: C.goldDeep ?? C.skyPale }]}>
-            <Text style={[ss.keyChipText, { color: C.gold ?? C.sky, fontSize: fs(11) }]}>
+            <Text
+              style={[
+                ss.keyChipText,
+                { color: C.gold ?? C.sky, fontSize: fs(11) },
+              ]}>
               {item.key}
             </Text>
           </View>
