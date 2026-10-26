@@ -2,8 +2,8 @@
   "name": "3ammm",
   "private": true,
   "version": "1.0.0",
-  "description": "3AMMM monorepo — Vercel deploys the API from 3ammm-server",
+  "description": "3AMMM monorepo — Vercel builds the Expo web app from 3ammm-app",
   "scripts": {
-    "build": "echo \"No frontend build — API only\""
+    "build": "npm --prefix 3ammm-app run build"
   }
 }

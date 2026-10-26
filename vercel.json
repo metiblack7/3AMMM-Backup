@@ -1,0 +1,5 @@
+{
+  "installCommand": "npm install --prefix 3ammm-app",
+  "buildCommand": "npm run build",
+  "outputDirectory": "3ammm-app/build"
+}
