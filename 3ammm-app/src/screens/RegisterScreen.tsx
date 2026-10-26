@@ -11,10 +11,10 @@ import {
   TextInput,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { BlurView } from "expo-blur";
 import { Feather } from "@expo/vector-icons";
 import { useApp } from "../lib/AppContext";
 import { useTheme } from "../lib/useTheme";
+import PlatformBlur from "../components/PlatformBlur";
 // Make sure these are correctly imported in your actual project
 // import { Spacing, Radius } from "../theme";
 
@@ -301,10 +301,11 @@ export default function RegisterScreen({
             },
           ]}>
           {isDark && (
-            <BlurView
+            <PlatformBlur
               intensity={45}
-              tint="dark"
               style={StyleSheet.absoluteFill}
+              isDark={isDark}
+              borderRadius={28}
             />
           )}
           <LinearGradient

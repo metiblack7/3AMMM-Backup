@@ -1,5 +1,4 @@
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Platform } from "react-native";
 
 export function useSafeLayout() {
   const insets = useSafeAreaInsets();

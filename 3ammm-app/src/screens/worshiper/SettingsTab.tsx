@@ -171,7 +171,11 @@ const sl = StyleSheet.create({
 });
 
 // ── SETTINGS TAB ─────────────────────────────────────────────
-export function SettingsTab() {
+export function SettingsTab({
+  onAdminLogin,
+}: {
+  onAdminLogin?: () => void;
+}) {
   const {
     t,
     lang,
@@ -183,7 +187,6 @@ export function SettingsTab() {
     boldLyrics,
     setBoldLyrics,
     setTheme,
-    signOut,
   } = useApp();
 
   const { isDark, C } = useTheme();
@@ -194,33 +197,24 @@ export function SettingsTab() {
 
   const [feedbackText, setFeedbackText] = useState("");
   const [appVersion, setAppVersion] = useState("1.0.0");
+  const adminAccessTapTimer = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+
+  useEffect(
+    () => () => {
+      if (adminAccessTapTimer.current) {
+        clearTimeout(adminAccessTapTimer.current);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     apiFetch("/api/app/version")
       .then((res: any) => setAppVersion(res?.version ?? "1.0.0"))
       .catch(() => {});
   }, []);
-
-  const handleSignOut = useCallback(() => {
-    Alert.alert(
-      t.signOutTitle,
-      t.confirmSignOut,
-      [
-        { text: t.cancel, style: "cancel" },
-        {
-          text: t.logout,
-          style: "destructive",
-          onPress: () => {
-            signOut().catch((err: any) => {
-              console.error("[SignOut] Error:", err);
-              Alert.alert(t.error, t.couldNotSignOut);
-            });
-          },
-        },
-      ],
-      { cancelable: true },
-    );
-  }, [signOut, t]);
 
   const handleFeedbackSubmit = useCallback(async () => {
     if (!feedbackText.trim()) {
@@ -711,6 +705,30 @@ export function SettingsTab() {
       <Text style={[sectionTitle, { fontSize: fs(11) }]}>{t.appUpdates}</Text>
       <View style={card}>
         <TouchableOpacity
+          style={s.hiddenAdminAccess}
+          onPress={() => {
+            if (adminAccessTapTimer.current) {
+              clearTimeout(adminAccessTapTimer.current);
+              adminAccessTapTimer.current = null;
+              onAdminLogin?.();
+              return;
+            }
+
+            adminAccessTapTimer.current = setTimeout(() => {
+              adminAccessTapTimer.current = null;
+            }, 900);
+          }}
+          activeOpacity={1}
+          accessibilityRole="button"
+          accessibilityLabel={t.adminAccess}
+          accessibilityHint="Tap twice quickly to open administrator sign in">
+          <MaterialCommunityIcons
+            name="shield-lock-outline"
+            size={16}
+            color={C.text3}
+          />
+        </TouchableOpacity>
+        <TouchableOpacity
           style={[s.rowBetween, { paddingVertical: Spacing.sm }]}
           onPress={handleCheckForUpdates}
           activeOpacity={0.7}>
@@ -737,24 +755,6 @@ export function SettingsTab() {
         </TouchableOpacity>
       </View>
 
-      {/* ── ACCOUNT ─────────────────────────────── */}
-      <Text style={[sectionTitle, { fontSize: fs(11) }]}>{t.account}</Text>
-      <View style={card}>
-        <TouchableOpacity
-          style={[
-            s.logoutRow,
-            {
-              backgroundColor: C.dangerBg,
-              borderColor: C.danger,
-            },
-          ]}
-          onPress={handleSignOut}
-          activeOpacity={0.8}>
-          <MaterialCommunityIcons name="logout" size={18} color={C.danger} />
-          <Text style={[s.logoutText, { color: C.danger }]}>{t.logout}</Text>
-        </TouchableOpacity>
-      </View>
-
       {/* ── FOOTER ──────────────────────────────── */}
       <View style={s.footer}>
         <View style={[s.footerLine, { backgroundColor: C.border }]} />
@@ -766,6 +766,14 @@ export function SettingsTab() {
 }
 
 const s = StyleSheet.create({
+  hiddenAdminAccess: {
+    width: 40,
+    height: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    alignSelf: "flex-end",
+    opacity: 0.22,
+  },
   divider: { height: 1, marginVertical: Spacing.md },
   rowBetween: {
     flexDirection: "row",
@@ -840,17 +848,6 @@ const s = StyleSheet.create({
     justifyContent: "center",
     borderWidth: 1,
   },
-  logoutRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-    paddingVertical: Spacing.md,
-    borderRadius: Radius.sm,
-    borderWidth: 1,
-    marginBottom: Spacing.md,
-  },
-  logoutText: { fontSize: 15, fontWeight: "700" },
   footer: {
     flexDirection: "row",
     alignItems: "center",

@@ -14,7 +14,7 @@ import { Feather } from "@expo/vector-icons";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/AppContext";
 import { useTheme } from "../../lib/useTheme";
-import { Loader, EmptyState } from "../../components/UI";
+import { Loader } from "../../components/UI";
 import AdminSongsTab from "./AdminSongsTab";
 import AdminSetlistsTab from "./AdminSetlistsTab";
 import { Spacing } from "../../theme";

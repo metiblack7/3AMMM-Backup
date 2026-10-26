@@ -6,7 +6,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   RefreshControl,
-  Platform,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Feather } from "@expo/vector-icons";
@@ -14,6 +13,7 @@ import { api } from "../../lib/api";
 import { useApp } from "../../lib/AppContext";
 import { useTheme } from "../../lib/useTheme";
 import { Spacing, Radius } from "../../theme";
+import PlatformBlur from "../../components/PlatformBlur";
 import { Song } from "../LyricsScreen";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -131,9 +131,16 @@ function HomeTabComponent({ onOpenSong, onNavigateTab }: Props) {
   );
 
   const nextSetlist = useMemo(() => setlists[0], [setlists]);
-  const nextSongs: Song[] = useMemo(
-    () => (nextSetlist ? (nextSetlist.songIds || []).filter(Boolean) : []),
-    [nextSetlist],
+  const nextSongs = useMemo(
+    () =>
+      (nextSetlist?.songIds ?? []).flatMap((entry): Song[] => {
+        if (typeof entry === "string") {
+          const song = songs.find((item) => item._id === entry);
+          return song ? [song] : [];
+        }
+        return entry ? [entry] : [];
+      }),
+    [nextSetlist, songs],
   );
 
   const heroGradient: [string, string] = isDark
@@ -149,11 +156,9 @@ function HomeTabComponent({ onOpenSong, onNavigateTab }: Props) {
   const card1Gradient: [string, string] = isDark
     ? [C.navyLight, C.navy]
     : [C.surface, C.bgDeep];
-
   const card2Gradient: [string, string] = isDark
     ? [C.surfaceHigh, C.surface]
     : [C.surface, C.bgDeep];
-
   const setlistGradient: [string, string] = isDark
     ? [C.surfaceHigh, C.bg]
     : [C.surface, C.bgDeep];
@@ -189,11 +194,12 @@ function HomeTabComponent({ onOpenSong, onNavigateTab }: Props) {
             style={{ flex: 1 }}
             activeOpacity={0.85}
             onPress={() => handleNavigateTab("songs")}>
-            <LinearGradient
-              colors={card1Gradient}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={[s.card, s.cardLeft]}>
+            <PlatformBlur
+              style={[s.card, s.cardLeft]}
+              borderRadius={Radius.lg}
+              isDark={isDark}
+              gradientColors={card1Gradient}
+              gradientOpacity={0.48}>
               <View style={s.cardIconBox}>
                 <Feather name="music" size={24} color={C.sky} />
               </View>
@@ -203,7 +209,7 @@ function HomeTabComponent({ onOpenSong, onNavigateTab }: Props) {
               <Text style={[s.cardLabel, { fontSize: fs(12) }]}>
                 {t.allSongs}
               </Text>
-            </LinearGradient>
+            </PlatformBlur>
           </TouchableOpacity>
 
           {/* FAVORITES CARD */}
@@ -211,11 +217,12 @@ function HomeTabComponent({ onOpenSong, onNavigateTab }: Props) {
             style={{ flex: 1 }}
             activeOpacity={0.85}
             onPress={() => handleNavigateTab("favs")}>
-            <LinearGradient
-              colors={card2Gradient}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={[s.card, s.cardRight]}>
+            <PlatformBlur
+              style={[s.card, s.cardRight]}
+              borderRadius={Radius.lg}
+              isDark={isDark}
+              gradientColors={card2Gradient}
+              gradientOpacity={0.48}>
               <View style={s.cardIconBox}>
                 <Feather name="heart" size={24} color={C.sky} />
               </View>
@@ -223,7 +230,7 @@ function HomeTabComponent({ onOpenSong, onNavigateTab }: Props) {
               <Text style={[s.cardLabel, { fontSize: fs(12) }]}>
                 {t.myFavs}
               </Text>
-            </LinearGradient>
+            </PlatformBlur>
           </TouchableOpacity>
         </View>
 
@@ -238,11 +245,12 @@ function HomeTabComponent({ onOpenSong, onNavigateTab }: Props) {
             </View>
 
             <View style={s.nextSlCardWrap}>
-              <LinearGradient
-                colors={setlistGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={s.nextSlCard}>
+              <PlatformBlur
+                style={s.nextSlCard}
+                borderRadius={Radius.lg}
+                isDark={isDark}
+                gradientColors={setlistGradient}
+                gradientOpacity={0.42}>
                 <View style={s.nextSlHdr}>
                   <View
                     style={[
@@ -286,7 +294,7 @@ function HomeTabComponent({ onOpenSong, onNavigateTab }: Props) {
                     </Text>
                     <View style={{ flex: 1, minWidth: 0 }}>
                       <Text
-                        style={[s.slName, { fontSize: fs(14) }]}
+                        style={[s.slName, { fontSize: fs(14), color: C.text }]}
                         numberOfLines={1}>
                         {song.title}
                       </Text>
@@ -302,7 +310,7 @@ function HomeTabComponent({ onOpenSong, onNavigateTab }: Props) {
                     </View>
                   </TouchableOpacity>
                 ))}
-              </LinearGradient>
+              </PlatformBlur>
             </View>
           </>
         )}

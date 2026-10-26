@@ -10,35 +10,25 @@ import {
   Animated,
   Easing,
   Image,
-  Platform,
   StyleSheet,
   useWindowDimensions,
   View,
 } from "react-native";
-import { BlurView } from "expo-blur";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import {
-  api,
-  saveToken,
-  getToken,
-  clearToken,
-  setUnauthorizedHandler,
-} from "./api";
+import { api, saveToken, clearToken } from "./api";
 import {
   useGoogleAuth,
   fetchGoogleUserInfo,
   getAccessTokenFromResponse,
 } from "./googleAuth";
-import { startAutoSync, syncAll } from "./sync";
-import { useNetworkStatus } from "./network";
 import translations, { LangKey } from "./i18n";
 import { DarkColors, LightColors } from "../theme";
 import {
   registerForPushNotificationsOnSignUp,
   scheduleWelcomeNotification,
 } from "./notifications";
-import * as Notifications from "expo-notifications";
 import { db } from "./db";
+import PlatformBlur from "../components/PlatformBlur";
 
 export type ThemeColors = typeof DarkColors;
 
@@ -52,8 +42,6 @@ export interface Profile {
 
 const PROFILE_KEY = "3ammm_profile";
 const SPLASH_HOLD_MS = 2500;
-const GUEST_SESSION_KEY = "guest_session_active";
-const WELCOME_NOTIF_KEY = "welcome_notif_sent";
 
 // ── App font scale ────────────────────────────────────────────
 export type AppFontScale = "small" | "medium" | "large";
@@ -68,7 +56,7 @@ export interface AppContextType {
   lang: LangKey;
   t: Record<string, string>;
   toggleLang: () => void;
-  signIn: (email: string, password: string) => Promise<void>;
+  signIn: (email: string, password: string) => Promise<Profile>;
   signUp: (
     name: string,
     email: string,
@@ -254,12 +242,12 @@ function SplashOverlay({
   return (
     <Animated.View
       style={[styles.splashContainer, { opacity: containerOpacity }]}>
-      <BlurView
+      <PlatformBlur
         intensity={55}
-        tint="dark"
+        isDark
         style={StyleSheet.absoluteFillObject}>
         <View style={styles.blurTint} />
-      </BlurView>
+      </PlatformBlur>
 
       <Animated.View
         style={[
@@ -313,7 +301,7 @@ async function maybeSendWelcomeNotification(lang: LangKey) {
 export function AppProvider({ children }: AppProviderProps) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [lang, setLang] = useState<LangKey>("en");
-  const [loading, setLoading] = useState(true);
+  const [loading] = useState(false);
   const [authError, setAuthError] = useState("");
   const [fontSize, setFontSize] = useState(16);
   const [lineSpacing, setLineSpacing] = useState(1.6);
@@ -321,8 +309,6 @@ export function AppProvider({ children }: AppProviderProps) {
   const [theme, setTheme] = useState<"light" | "dark">("dark");
   const [showSplash, setShowSplash] = useState(true);
   const [appFontScale, setAppFontScaleState] = useState<AppFontScale>("medium");
-
-  const isOnline = useNetworkStatus();
 
   const t = translations[lang];
   const C = theme === "dark" ? DarkColors : LightColors;
@@ -392,49 +378,6 @@ export function AppProvider({ children }: AppProviderProps) {
 
     (async () => {
       try {
-        startAutoSync();
-
-        const token = await getToken();
-
-        // ── Task 1: Restore guest session ─────────────────
-        const guestActive = await db.session.getGuestSessionActive();
-        if (!token && guestActive) {
-          const guestProfile = {
-            _id: "guest_persistent",
-            role: "worshiper",
-            name: "Guest",
-          } as Profile;
-          if (mounted) setProfile(guestProfile);
-        }
-
-        if (token) {
-          const savedProfile = await AsyncStorage.getItem(PROFILE_KEY);
-          if (savedProfile && mounted) {
-            setProfile(JSON.parse(savedProfile));
-          }
-        }
-
-        if (token) {
-          try {
-            const { user } = await api.auth.me();
-            if (mounted) {
-              setProfile(user);
-              await AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(user));
-            }
-          } catch (err: any) {
-            const message: string = err?.message || "";
-            if (
-              message.includes("Invalid or expired token") ||
-              message.includes("Unauthorized") ||
-              message.includes("jwt")
-            ) {
-              await clearToken();
-              await AsyncStorage.removeItem(PROFILE_KEY);
-              if (mounted) setProfile(null);
-            }
-          }
-        }
-
         const [
           savedFS,
           savedLS,
@@ -460,33 +403,25 @@ export function AppProvider({ children }: AppProviderProps) {
           if (savedFontScale)
             setAppFontScaleState(savedFontScale as AppFontScale);
         }
-
-        if (isOnline) {
-          syncAll(true).catch((err) =>
-            console.error("Initial sync failed:", err),
-          );
-        }
       } catch (err) {
         console.error("Initialization error:", err);
-        await clearToken();
-      } finally {
-        if (mounted) setLoading(false);
       }
     })();
 
     return () => {
       mounted = false;
     };
-  }, [isOnline]);
+  }, []);
 
   // ── Auth functions ────────────────────────────────────────
-  async function signIn(email: string, password: string) {
+  async function signIn(email: string, password: string): Promise<Profile> {
     setAuthError("");
     try {
       const { token, user } = await api.auth.login(email, password);
       await saveToken(token);
       setProfile(user);
       await AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(user));
+      return user;
     } catch (err: any) {
       setAuthError(err.message || "Sign in failed");
       throw err;

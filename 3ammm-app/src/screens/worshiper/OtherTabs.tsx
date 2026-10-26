@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import {
   View,
   ScrollView,
@@ -15,6 +15,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useApp } from "../../lib/AppContext";
 import { useTheme } from "../../lib/useTheme";
 import { Loader, EmptyState } from "../../components/UI";
+import PlatformBlur from "../../components/PlatformBlur";
 import { Spacing, Radius } from "../../theme";
 import { Song } from "../LyricsScreen";
 import { favoritesService } from "../../lib/favoritesService";
@@ -55,22 +56,25 @@ function FavoriteSongCard({
   onOpenSong: (song: Song) => void;
 }) {
   const { fs } = useApp();
-  const [g1, g2] = isDark ? ["#082f41", "#00121e"] : ["#DFF5FF", "#F7FCFF"];
-
+  const gradientColors: [string, string] = isDark
+    ? ["#082f41", "#00121e"]
+    : ["#DFF5FF", "#F7FCFF"];
   return (
     <View style={ss.songCardWrap}>
-      <TouchableOpacity
-        onPress={() => onOpenSong(item)}
-        activeOpacity={0.75}
-        {...({ android_ripple: null } as any)}>
-        <LinearGradient
-          colors={[g1, g2]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={[
-            ss.songCard,
-            { borderColor: isDark ? C.glassBorder : C.border },
-          ]}>
+      <PlatformBlur
+        style={[
+          ss.songCard,
+          { borderColor: isDark ? C.glassBorder : C.border },
+        ]}
+        borderRadius={16}
+        isDark={isDark}
+        gradientColors={gradientColors}
+        gradientOpacity={0.55}>
+        <TouchableOpacity
+          style={ss.songCardContent}
+          onPress={() => onOpenSong(item)}
+          activeOpacity={0.75}
+          {...({ android_ripple: null } as any)}>
           <View style={ss.songHeader}>
             <View
               style={[
@@ -84,7 +88,11 @@ function FavoriteSongCard({
             </View>
 
             <View style={ss.songInfo}>
-              <Text style={[ss.songTitle, { color: C.text, fontSize: fs(15) }]}>
+              <Text
+                style={[
+                  ss.songTitle,
+                  { color: C.text, fontSize: fs(15) },
+                ]}>
                 {item.title}
               </Text>
               <Text style={[ss.songMeta, { color: C.text2, fontSize: fs(12) }]}>
@@ -113,8 +121,8 @@ function FavoriteSongCard({
               </Text>
             </View>
           </View>
-        </LinearGradient>
-      </TouchableOpacity>
+        </TouchableOpacity>
+      </PlatformBlur>
     </View>
   );
 }
@@ -122,7 +130,7 @@ function FavoriteSongCard({
 // ── SETLISTS TAB ──────────────────────────────────────────────
 export function SetlistsTab({ onOpenSong }: SongProps) {
   const { t, fs } = useApp();
-  const { C } = useTheme();
+  const { C, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const [setlists, setSetlists] = useState<LocalSetlist[]>([]);
   const [loading, setLoading] = useState(true);
@@ -214,12 +222,18 @@ export function SetlistsTab({ onOpenSong }: SongProps) {
         setlists.map((sl) => {
           const songs: Song[] = sl.songIds || [];
           return (
-            <View
+            <PlatformBlur
               key={sl._id}
               style={[
                 s.card,
-                { backgroundColor: C.surface, borderColor: C.border },
-              ]}>
+                { borderColor: C.border },
+              ]}
+              isDark={isDark}
+              borderRadius={Radius.md}
+              gradientColors={
+                isDark ? [C.surfaceHigh, C.surface] : [C.surface, C.bgDeep]
+              }
+              gradientOpacity={0.36}>
               <View
                 style={[
                   s.cardHdr,
@@ -264,7 +278,7 @@ export function SetlistsTab({ onOpenSong }: SongProps) {
                   </View>
                 </TouchableOpacity>
               ))}
-            </View>
+            </PlatformBlur>
           );
         })
       )}
@@ -605,6 +619,7 @@ const ss = StyleSheet.create({
       android: { elevation: 4 },
     }),
   },
+  songCardContent: { flex: 1 },
   songHeader: {
     flexDirection: "row",
     alignItems: "center",

@@ -42,7 +42,7 @@ async function registerWebPushNotification(userName: string): Promise<void> {
 }
 
 // ── Native push (Android/iOS) ─────────────────────────────────
-async function registerNativePushNotification(userName: string): Promise<void> {
+async function registerNativePushNotification(): Promise<void> {
   if (!Device.isDevice) return;
 
   const welcomeSent = await AsyncStorage.getItem("welcome_notif_sent");
@@ -117,7 +117,7 @@ export async function registerForPushNotificationsOnSignUp(
   if (Platform.OS === "web") {
     await registerWebPushNotification(userName);
   } else {
-    await registerNativePushNotification(userName);
+    await registerNativePushNotification();
   }
 
   if (already !== "true") {

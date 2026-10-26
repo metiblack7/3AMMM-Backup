@@ -1,8 +1,6 @@
 import * as Google from "expo-auth-session/providers/google";
 import * as WebBrowser from "expo-web-browser";
-import * as Linking from "expo-linking";
 import { makeRedirectUri } from "expo-auth-session";
-import { Platform } from "react-native";
 
 // Complete the auth session when returning from Google
 WebBrowser.maybeCompleteAuthSession();

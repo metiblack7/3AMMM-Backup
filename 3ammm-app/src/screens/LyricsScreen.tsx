@@ -27,7 +27,6 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "../lib/api";
 import { db } from "../lib/db";
-import { publish } from "../lib/pubsub";
 import { useApp } from "../lib/AppContext";
 import { useTheme } from "../lib/useTheme";
 import { Spacing } from "../theme";
@@ -666,12 +665,26 @@ export default function LyricsScreen({
           </TouchableOpacity>
 
           <View style={s.titleBlock}>
-            <Text style={[s.title, { color: C.text }]} numberOfLines={1}>
-              {song.title}
-            </Text>
-            <Text style={[s.singer, { color: C.text2 }]} numberOfLines={1}>
-              {song.singerName}
-            </Text>
+            <View style={s.titleTextWrap}>
+              <Text
+                style={[
+                  s.title,
+                  {
+                    color: isDark ? C.sky : C.navy,
+                    textShadowColor: isDark
+                      ? "rgba(135,206,235,0.25)"
+                      : "rgba(42,138,184,0.15)",
+                    textShadowOffset: { width: 0, height: 1 },
+                    textShadowRadius: 6,
+                  },
+                ]}
+                numberOfLines={1}>
+                {song.title}
+              </Text>
+              <Text style={[s.singer, { color: C.text2 }]} numberOfLines={1}>
+                {song.singerName}
+              </Text>
+            </View>
           </View>
 
           <View style={s.keyWrap}>
@@ -1014,10 +1027,17 @@ const s = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     gap: 3,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  titleTextWrap: {
+    flex: 1,
+    minWidth: 0,
+    gap: 3,
   },
   title: {
     fontSize: 16,
-    fontWeight: "700",
+    fontWeight: "800",
     letterSpacing: 0.2,
   },
   singer: {

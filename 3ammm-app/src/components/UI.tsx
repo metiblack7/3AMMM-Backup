@@ -5,10 +5,9 @@ import {
   TextInput,
   TouchableOpacity,
   ActivityIndicator,
-  Platform,
   StatusBar,
 } from "react-native";
-import { Colors, Typography, Spacing, Radius, AppStyles } from "../theme";
+import { Colors, AppStyles } from "../theme";
 
 // ── SCREEN HEADER ──────────────────────────────────────────────
 export function Header({

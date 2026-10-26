@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect } from "react";
+import React, { useState, useCallback, useRef } from "react";
 import {
   View,
   StyleSheet,
@@ -9,7 +9,6 @@ import {
   Easing,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { BlurView } from "expo-blur";
 import { FontAwesome5 } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../lib/useTheme";
@@ -18,6 +17,10 @@ import SongsTab from "../screens/worshiper/SongsTab";
 import { SetlistsTab, FavoritesTab } from "../screens/worshiper/OtherTabs";
 import { SettingsTab } from "../screens/worshiper/SettingsTab";
 import LyricsScreen, { Song } from "../screens/LyricsScreen";
+import PlatformBlur from "../components/PlatformBlur";
+import LoginScreen from "../screens/LoginScreen";
+import AdminDashboard from "../screens/admin/AdminDashboard";
+import { useApp } from "../lib/AppContext";
 
 type WTab = "home" | "songs" | "setlists" | "favs" | "settings";
 
@@ -36,7 +39,11 @@ const TAB_BAR_MARGIN = 18;
 
 export default function WorshiperApp() {
   const { C, isDark } = useTheme();
+  const { isAdmin } = useApp();
   const insets = useSafeAreaInsets();
+  const [adminRoute, setAdminRoute] = useState<
+    "closed" | "login" | "dashboard"
+  >("closed");
 
   // ── allSongs is loaded by SongsTab and shared with FavoritesTab
   // so favorites can show the same page numbers as the songs list.
@@ -116,6 +123,20 @@ export default function WorshiperApp() {
     [activeTab, tabOpacity, tabTranslate],
   );
 
+  if (adminRoute === "dashboard" && isAdmin) {
+    return <AdminDashboard />;
+  }
+
+  if (adminRoute === "login") {
+    return (
+      <LoginScreen
+        adminOnly
+        onBack={() => setAdminRoute("closed")}
+        onAdminLoginSuccess={() => setAdminRoute("dashboard")}
+      />
+    );
+  }
+
   const pillGradient: [string, string] = isDark
     ? [C.glass, C.navyGlow]
     : [C.surface, C.bgDeep];
@@ -169,13 +190,16 @@ export default function WorshiperApp() {
                   <SongsTab
                     onOpenSong={openSong}
                     scrollOffsetRef={songsScrollOffset}
+                    onSongsLoaded={setAllSongs}
                   />
                 )}
                 {tab.key === "setlists" && (
                   <SetlistsTab onOpenSong={openSong} />
                 )}
                 {tab.key === "favs" && <FavoritesTab onOpenSong={openSong} />}
-                {tab.key === "settings" && <SettingsTab />}
+                {tab.key === "settings" && (
+                  <SettingsTab onAdminLogin={() => setAdminRoute("login")} />
+                )}
               </Animated.View>
             );
           })}
@@ -206,21 +230,12 @@ export default function WorshiperApp() {
             />
           </View>
 
-          <View
-            style={[
-              StyleSheet.absoluteFill,
-              { borderRadius: 32, overflow: "hidden" },
-            ]}>
-            <BlurView
-              intensity={isDark ? 38 : 55}
-              tint={isDark ? "dark" : "light"}
-              experimentalBlurMethod={
-                Platform.OS === "android" ? "dimezisBlurView" : undefined
-              }
-              blurReductionFactor={4}
-              style={StyleSheet.absoluteFill}
-            />
-          </View>
+          <PlatformBlur
+            intensity={isDark ? 38 : 55}
+            isDark={isDark}
+            style={StyleSheet.absoluteFill}
+            borderRadius={32}
+          />
 
           <View
             style={[styles.pillTopEdge, { backgroundColor: pillTopEdgeBg }]}

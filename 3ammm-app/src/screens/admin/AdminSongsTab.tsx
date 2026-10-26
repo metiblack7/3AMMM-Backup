@@ -18,7 +18,7 @@ import { api } from "../../lib/api";
 import { useApp } from "../../lib/AppContext";
 import { useTheme } from "../../lib/useTheme";
 import { Loader, EmptyState } from "../../components/UI";
-import { Spacing, Radius } from "../../theme";
+import { Spacing } from "../../theme";
 import LyricsScreen, { type Song } from "../LyricsScreen";
 
 function parseLyrics(raw: string): { s: string; t: string }[] {

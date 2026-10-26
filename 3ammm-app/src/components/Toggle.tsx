@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { View, StyleSheet, Animated, TouchableOpacity } from "react-native";
+import { StyleSheet, Animated, TouchableOpacity } from "react-native";
 import { useTheme } from "../lib/useTheme";
 
 interface ToggleProps {

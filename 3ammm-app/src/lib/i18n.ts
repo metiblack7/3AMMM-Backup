@@ -34,6 +34,11 @@ const translations = {
     notifs: "Updates",
 
     // Admin
+    adminAccess: "Admin login",
+    adminSignIn: "Administrator sign in",
+    adminSignInSubtitle:
+      "Sign in with an administrator account to manage the app.",
+    adminOnlyError: "This account does not have administrator access.",
     adminDash: "Dashboard",
     members: "Members",
     totalSongs: "Songs",
@@ -179,6 +184,10 @@ const translations = {
     notifs: "ማሳወቂያዎች",
 
     // Admin
+    adminAccess: "የአስተዳዳሪ መግቢያ",
+    adminSignIn: "እንደ አስተዳዳሪ ይግቡ",
+    adminSignInSubtitle: "መተግበሪያውን ለማስተዳደር ይግቡ።",
+    adminOnlyError: "ይህ መለያ የአስተዳዳሪ ፈቃድ የለውም።",
     adminDash: "ዳሽቦርድ",
     members: "አባላት",
     totalSongs: "መዝሙሮች",

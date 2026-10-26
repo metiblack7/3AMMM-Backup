@@ -10,10 +10,6 @@ import { API_URL } from './env';
 let isOnline = true;
 let listeners: ((online: boolean) => void)[] = [];
 
-// ── Initialize Network Listener ──────────────────────────────────────
-// Uses fetch to detect connectivity (works on React Native and web)
-let statusCheckTimeout: ReturnType<typeof setTimeout> | null = null;
-
 async function checkConnectivity(): Promise<boolean> {
   try {
     // On web, use the API health check (avoids CORS issues with third-party domains).

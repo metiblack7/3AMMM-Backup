@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { API_URL, SYNC_CONFIG, logError } from "./env";
+import { API_URL, logError } from "./env";
 
 const TOKEN_KEY = "3ammm_token";
 const TIMEOUT_MS = 25000; // increased from 10s — Vercel cold start can take 15-25s

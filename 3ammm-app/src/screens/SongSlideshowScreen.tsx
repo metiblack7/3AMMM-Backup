@@ -43,7 +43,6 @@ const BLACK = "#000000";
 const WHITE_60 = "rgba(255,255,255,0.60)";
 const WHITE_12 = "rgba(255,255,255,0.12)";
 const SKY_20 = "rgba(135,206,235,0.20)";
-const SKY_60 = "rgba(135,206,235,0.60)";
 
 // ─────────────────────────────────────────────────────────────
 // Main Component
@@ -61,10 +60,6 @@ export default function SongSlideshowScreen({
   const [autoAdvance, setAutoAdvance] = useState(false);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [dims, setDims] = useState(Dimensions.get("window"));
-  const [orientation, setOrientation] = useState<"portrait" | "landscape">(
-    dims.width > dims.height ? "landscape" : "portrait",
-  );
-
   // ── Refs ──────────────────────────────────────────────────
   const flatListRef = useRef<FlatList>(null);
   const currentIndexRef = useRef(0); // mirror of state — for interval closure
@@ -105,9 +100,6 @@ export default function SongSlideshowScreen({
     const syncLayoutFromWindow = () => {
       const nextDims = Dimensions.get("window");
       setDims(nextDims);
-      setOrientation(
-        nextDims.width > nextDims.height ? "landscape" : "portrait",
-      );
     };
 
     const setup = async () => {

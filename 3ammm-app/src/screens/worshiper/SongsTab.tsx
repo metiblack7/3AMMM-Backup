@@ -30,6 +30,7 @@ import { useTheme } from "../../lib/useTheme";
 import { useNetworkStatus } from "../../lib/network";
 import { db } from "../../lib/db";
 import { EmptyState } from "../../components/UI";
+import PlatformBlur from "../../components/PlatformBlur";
 import { Spacing } from "../../theme";
 import { Song } from "../LyricsScreen";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -59,16 +60,17 @@ const AnimatedSongCard = React.memo(function AnimatedSongCard({
   index,
   isDark,
   C,
-  cardGradients,
   onOpenSong,
 }: {
   item: NumberedSong;
   index: number;
   isDark: boolean;
   C: ReturnType<typeof useTheme>["C"];
-  cardGradients: (category: string) => [string, string];
   onOpenSong: (song: Song) => void;
 }) {
+  const gradientColors: [string, string] = isDark
+    ? ["#082f41", "#00121e"]
+    : ["#DFF5FF", "#F7FCFF"];
   const mountOpacity = useRef(new Animated.Value(0)).current;
   const mountTranslateY = useRef(new Animated.Value(22)).current;
   const mountScale = useRef(new Animated.Value(0.96)).current;
@@ -104,8 +106,6 @@ const AnimatedSongCard = React.memo(function AnimatedSongCard({
     ]).start();
   }, [item._id, index, mountOpacity, mountTranslateY, mountScale]);
 
-  const [g1, g2] = cardGradients(item.category ?? "");
-
   return (
     <Animated.View
       style={{
@@ -114,24 +114,26 @@ const AnimatedSongCard = React.memo(function AnimatedSongCard({
         marginBottom: CARD_GAP,
       }}>
       <View style={ss.songCardWrap}>
-        <TouchableOpacity
-          onPress={() => onOpenSong(item)}
-          activeOpacity={0.75}
-          {...({ android_ripple: null } as any)}>
-          <LinearGradient
-            colors={[g1, g2]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={[
-              ss.songCard,
-              {
-                borderColor: isDark ? C.glassBorder : C.border,
-                ...Platform.select({
-                  ios: { shadowColor: isDark ? C.sky : C.navy },
-                  android: {},
-                }),
-              },
-            ]}>
+        <PlatformBlur
+          style={[
+            ss.songCard,
+            {
+              borderColor: isDark ? C.glassBorder : C.border,
+              ...Platform.select({
+                ios: { shadowColor: isDark ? C.sky : C.navy },
+                android: {},
+              }),
+            },
+          ]}
+          borderRadius={16}
+          isDark={isDark}
+          gradientColors={gradientColors}
+          gradientOpacity={0.55}>
+          <TouchableOpacity
+            style={ss.songCardContent}
+            onPress={() => onOpenSong(item)}
+            activeOpacity={0.75}
+            {...({ android_ripple: null } as any)}>
             <View style={ss.songHeader}>
               <View
                 style={[
@@ -174,8 +176,8 @@ const AnimatedSongCard = React.memo(function AnimatedSongCard({
                 </Text>
               </View>
             </View>
-          </LinearGradient>
-        </TouchableOpacity>
+          </TouchableOpacity>
+        </PlatformBlur>
       </View>
     </Animated.View>
   );
@@ -441,12 +443,6 @@ function SongsTabComponent({
     });
   }, [loading, songs.length, scrollOffsetRef]);
 
-  const cardGradients = useCallback(
-    (_category: string): [string, string] =>
-      isDark ? ["#082f41", "#00121e"] : ["#DFF5FF", "#F7FCFF"],
-    [isDark],
-  );
-
   const getItemLayout = useCallback(
     (_: any, index: number) => ({
       length: CARD_HEIGHT,
@@ -523,11 +519,10 @@ function SongsTabComponent({
         index={index}
         isDark={isDark}
         C={C}
-        cardGradients={cardGradients}
         onOpenSong={onOpenSong}
       />
     ),
-    [C, isDark, cardGradients, onOpenSong],
+    [C, isDark, onOpenSong],
   );
 
   if (loading) {
@@ -875,6 +870,7 @@ const ss = StyleSheet.create({
       android: { elevation: 4 },
     }),
   },
+  songCardContent: { flex: 1 },
   songHeader: {
     flexDirection: "row",
     alignItems: "center",

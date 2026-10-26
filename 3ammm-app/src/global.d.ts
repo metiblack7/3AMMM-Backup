@@ -6,10 +6,3 @@ declare namespace JSX {
     [elemName: string]: any;
   }
 }
-
-declare module 'expo-blur' {
-  import { ComponentType } from 'react';
-  const BlurView: ComponentType<any>;
-  export { BlurView };
-  export default BlurView;
-}

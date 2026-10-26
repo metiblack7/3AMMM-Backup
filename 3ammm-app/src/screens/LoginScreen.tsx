@@ -164,11 +164,24 @@ const f = StyleSheet.create({
 // ─────────────────────────────────────────────────────
 export default function LoginScreen({
   onGoRegister,
+  adminOnly = false,
+  onBack,
+  onAdminLoginSuccess,
 }: {
-  onGoRegister: () => void;
+  onGoRegister?: () => void;
+  adminOnly?: boolean;
+  onBack?: () => void;
+  onAdminLoginSuccess?: () => void;
 }) {
-  const { signIn, signInWithGoogle, loginAsGuest, t, toggleLang, darkMode } =
-    useApp();
+  const {
+    signIn,
+    signOut,
+    signInWithGoogle,
+    loginAsGuest,
+    t,
+    toggleLang,
+    darkMode,
+  } = useApp();
   const insets = useSafeAreaInsets();
   const C = darkMode ? DarkColors : LightColors;
   const isDark = darkMode;
@@ -176,7 +189,7 @@ export default function LoginScreen({
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const [showEmailLogin, setShowEmailLogin] = useState(false);
+  const [showEmailLogin, setShowEmailLogin] = useState(adminOnly);
 
   // ── Unified loading state ─────────────────────────────────────
   // Prevents two auth actions running at once and ensures each
@@ -240,7 +253,15 @@ const [authLoading, setAuthLoading] = useState<
     setAuthLoading("email");
     setError("");
     try {
-      await signIn(email.trim(), password);
+      const user = await signIn(email.trim(), password);
+      if (adminOnly) {
+        if (user.role !== "admin") {
+          await signOut();
+          setError(t.adminOnlyError);
+          return;
+        }
+        onAdminLoginSuccess?.();
+      }
     } catch (err: any) {
       const message = err.message || t.invalidCreds;
       if (message.includes("Database connection failed")) {
@@ -346,7 +367,18 @@ const [authLoading, setAuthLoading] = useState<
             },
           ]}>
           {/* ── LANG TOGGLE ──────────────────────────── */}
-          <View style={s.topRow}>
+          <View style={[s.topRow, adminOnly && s.adminTopRow]}>
+            {adminOnly && (
+              <TouchableOpacity
+                onPress={onBack}
+                style={s.adminBackButton}
+                activeOpacity={0.75}
+                accessibilityRole="button"
+                accessibilityLabel="Back">
+                <Feather name="arrow-left" size={18} color={C.sky} />
+                <Text style={[s.langPillText, { color: C.sky }]}>{t.back}</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
               onPress={toggleLang}
               disabled={isAnyLoading}
@@ -410,59 +442,69 @@ const [authLoading, setAuthLoading] = useState<
               style={s.cardSheen}
             />
 
-            <Text style={[s.cardTitle, { color: C.text }]}>{t.signIn}</Text>
+            <Text style={[s.cardTitle, { color: C.text }]}>
+              {adminOnly ? t.adminSignIn : t.signIn}
+            </Text>
             <Text style={[s.cardSub, { color: C.text3 }]}>
-              Access your worship space
+              {adminOnly
+                ? t.adminSignInSubtitle
+                : "Access your worship space"}
             </Text>
 
             {/* ── GOOGLE SIGN-IN ────────────────────────── */}
-            <TouchableOpacity
-              style={[
-                s.socialBtnWrap,
-                {
-                  borderColor: C.border,
-                  backgroundColor: isDark
-                    ? "rgba(255,255,255,0.06)"
-                    : "rgba(255,255,255,0.5)",
-                  opacity: isAnyLoading ? 0.6 : 1,
-                },
-              ]}
-              onPress={handleGoogleSignIn}
-              disabled={isAnyLoading}
-              activeOpacity={0.85}>
-              <MaterialCommunityIcons name="google" size={18} color={C.sky} />
-              <Text style={[s.socialBtnText, { color: C.text }]}>
-                {isGoogleLoading ? "Signing in..." : "Continue with Google"}
-              </Text>
-            </TouchableOpacity>
+            {!adminOnly && (
+              <TouchableOpacity
+                style={[
+                  s.socialBtnWrap,
+                  {
+                    borderColor: C.border,
+                    backgroundColor: isDark
+                      ? "rgba(255,255,255,0.06)"
+                      : "rgba(255,255,255,0.5)",
+                    opacity: isAnyLoading ? 0.6 : 1,
+                  },
+                ]}
+                onPress={handleGoogleSignIn}
+                disabled={isAnyLoading}
+                activeOpacity={0.85}>
+                <MaterialCommunityIcons name="google" size={18} color={C.sky} />
+                <Text style={[s.socialBtnText, { color: C.text }]}>
+                  {isGoogleLoading ? "Signing in..." : "Continue with Google"}
+                </Text>
+              </TouchableOpacity>
+            )}
 
             {/* ── GUEST LOGIN ───────────────────────────── */}
-            <TouchableOpacity
-              style={[
-                s.socialBtnWrap,
-                {
-                  borderColor: C.border,
-                  backgroundColor: isDark
-                    ? "rgba(255,255,255,0.06)"
-                    : "rgba(255,255,255,0.5)",
-                  opacity: isAnyLoading ? 0.6 : 1,
-                },
-              ]}
-              onPress={handleContinueGuest}
-              disabled={isAnyLoading}
-              activeOpacity={0.85}>
-              <Feather name="user" size={18} color={C.text2} />
-              <Text style={[s.socialBtnText, { color: C.text }]}>
-                {isGuestLoading ? "Please wait..." : "Continue without login"}
-              </Text>
-            </TouchableOpacity>
+            {!adminOnly && (
+              <TouchableOpacity
+                style={[
+                  s.socialBtnWrap,
+                  {
+                    borderColor: C.border,
+                    backgroundColor: isDark
+                      ? "rgba(255,255,255,0.06)"
+                      : "rgba(255,255,255,0.5)",
+                    opacity: isAnyLoading ? 0.6 : 1,
+                  },
+                ]}
+                onPress={handleContinueGuest}
+                disabled={isAnyLoading}
+                activeOpacity={0.85}>
+                <Feather name="user" size={18} color={C.text2} />
+                <Text style={[s.socialBtnText, { color: C.text }]}>
+                  {isGuestLoading ? "Please wait..." : "Continue without login"}
+                </Text>
+              </TouchableOpacity>
+            )}
 
             {/* ── DIVIDER ──────────────────────────────── */}
-            <View style={s.dividerWrap}>
-              <View style={[s.dividerLine, { backgroundColor: C.border }]} />
-              <Text style={[s.dividerText, { color: C.text3 }]}>OR</Text>
-              <View style={[s.dividerLine, { backgroundColor: C.border }]} />
-            </View>
+            {!adminOnly && (
+              <View style={s.dividerWrap}>
+                <View style={[s.dividerLine, { backgroundColor: C.border }]} />
+                <Text style={[s.dividerText, { color: C.text3 }]}>OR</Text>
+                <View style={[s.dividerLine, { backgroundColor: C.border }]} />
+              </View>
+            )}
 
             {/* ── ERROR ────────────────────────────────── */}
             {error ? (
@@ -480,20 +522,22 @@ const [authLoading, setAuthLoading] = useState<
             ) : null}
 
             {/* ── TOGGLE EMAIL LOGIN ────────────────────── */}
-            <TouchableOpacity
-              style={[s.toggleLoginBtn, { opacity: isAnyLoading ? 0.5 : 1 }]}
-              onPress={handleToggleEmailLogin}
-              disabled={isAnyLoading}
-              activeOpacity={0.7}>
-              <Text style={[s.toggleLoginText, { color: C.sky }]}>
-                {showEmailLogin ? "Hide Email Login" : "Use Email & Password"}
-              </Text>
-              <Feather
-                name={showEmailLogin ? "chevron-up" : "chevron-down"}
-                size={16}
-                color={C.sky}
-              />
-            </TouchableOpacity>
+            {!adminOnly && (
+              <TouchableOpacity
+                style={[s.toggleLoginBtn, { opacity: isAnyLoading ? 0.5 : 1 }]}
+                onPress={handleToggleEmailLogin}
+                disabled={isAnyLoading}
+                activeOpacity={0.7}>
+                <Text style={[s.toggleLoginText, { color: C.sky }]}>
+                  {showEmailLogin ? "Hide Email Login" : "Use Email & Password"}
+                </Text>
+                <Feather
+                  name={showEmailLogin ? "chevron-up" : "chevron-down"}
+                  size={16}
+                  color={C.sky}
+                />
+              </TouchableOpacity>
+            )}
 
             {/* ── EMAIL / PASSWORD FIELDS ───────────────── */}
             {showEmailLogin && (
@@ -546,14 +590,14 @@ const [authLoading, setAuthLoading] = useState<
               </>
             )}
 
-            <View style={s.switchRow}>
+            {!adminOnly && onGoRegister && <View style={s.switchRow}>
               <Text style={[s.switchText, { color: C.text3 }]}>{t.noAcc} </Text>
               <TouchableOpacity onPress={onGoRegister} activeOpacity={0.7}>
                 <Text style={[s.switchLink, { color: C.sky }]}>
                   {t.createAcc}
                 </Text>
               </TouchableOpacity>
-            </View>
+            </View>}
           </View>
 
           {/* ── FOOTER ───────────────────────────────── */}
@@ -582,6 +626,16 @@ const s = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "flex-end",
     marginBottom: 4,
+  },
+  adminTopRow: {
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  adminBackButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 8,
   },
   langPill: {
     flexDirection: "row",
