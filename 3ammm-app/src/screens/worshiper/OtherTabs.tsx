@@ -7,11 +7,10 @@ import {
   StyleSheet,
   RefreshControl,
   TouchableOpacity,
-  Platform,
-  StatusBar,
+  Alert,
 } from "react-native";
+import { BlurTargetView } from "expo-blur";
 import { Feather } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { useApp } from "../../lib/AppContext";
 import { useTheme } from "../../lib/useTheme";
 import { Loader, EmptyState } from "../../components/UI";
@@ -22,7 +21,9 @@ import { favoritesService } from "../../lib/favoritesService";
 import { subscribe } from "../../lib/pubsub";
 import { api } from "../../lib/api";
 import { db, Setlist as DBSetlist } from "../../lib/db";
+import GlassHeader from "../../components/GlassHeader";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { AnimatedSongCard, NumberedSong } from "./SongsTab";
 
 interface LocalSetlist extends Pick<DBSetlist, "_id" | "date" | "songIds"> {
   title: string;
@@ -41,104 +42,15 @@ interface SongProps {
   onBackToSongs?: () => void;
   allSongs?: Song[];
 }
-
-type NumberedSong = Song & { pageNumber: number };
-
-function FavoriteSongCard({
-  item,
-  isDark,
-  C,
-  onOpenSong,
-}: {
-  item: NumberedSong;
-  isDark: boolean;
-  C: ReturnType<typeof useTheme>["C"];
-  onOpenSong: (song: Song) => void;
-}) {
-  const { fs } = useApp();
-  const gradientColors: [string, string] = isDark
-    ? ["#082f41", "#00121e"]
-    : ["#DFF5FF", "#F7FCFF"];
-  return (
-    <View style={ss.songCardWrap}>
-      <PlatformBlur
-        style={[
-          ss.songCard,
-          { borderColor: isDark ? C.glassBorder : C.border },
-        ]}
-        borderRadius={16}
-        isDark={isDark}
-        gradientColors={gradientColors}
-        gradientOpacity={0.55}>
-        <TouchableOpacity
-          style={ss.songCardContent}
-          onPress={() => onOpenSong(item)}
-          activeOpacity={0.75}
-          {...({ android_ripple: null } as any)}>
-          <View style={ss.songHeader}>
-            <View
-              style={[
-                ss.artContainer,
-                {
-                  backgroundColor: isDark ? C.skyGlowSoft : C.skyPale,
-                  borderColor: C.skyBorder,
-                },
-              ]}>
-              <Feather name="music" size={20} color={isDark ? C.sky : C.navy} />
-            </View>
-
-            <View style={ss.songInfo}>
-              <Text
-                style={[
-                  ss.songTitle,
-                  { color: C.text, fontSize: fs(15) },
-                ]}>
-                {item.title}
-              </Text>
-              <Text style={[ss.songMeta, { color: C.text2, fontSize: fs(12) }]}>
-                {item.singerName}
-              </Text>
-            </View>
-
-            <Feather name="chevron-right" size={18} color={C.text3} />
-          </View>
-
-          <View
-            style={[
-              ss.songFooter,
-              { borderTopColor: isDark ? C.glassBorder : C.border },
-            ]}>
-            <Text style={[ss.songNumber, { color: C.text3, fontSize: fs(18) }]}>
-              {item.pageNumber}
-            </Text>
-            <View
-              style={[
-                ss.keyChip,
-                { backgroundColor: C.goldDeep ?? C.skyPale },
-              ]}>
-              <Text style={[ss.keyChipText, { color: C.gold ?? C.sky }]}>
-                {item.key}
-              </Text>
-            </View>
-          </View>
-        </TouchableOpacity>
-      </PlatformBlur>
-    </View>
-  );
-}
-
 // ── SETLISTS TAB ──────────────────────────────────────────────
 export function SetlistsTab({ onOpenSong }: SongProps) {
-  const { t, fs } = useApp();
+  const { t } = useApp();
   const { C, isDark } = useTheme();
   const insets = useSafeAreaInsets();
+  const setlistsBlurTarget = React.useRef<View | null>(null);
   const [setlists, setSetlists] = useState<LocalSetlist[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-
-  // Task 7: use safe area inset for correct top spacing
-  const TOP =
-    Platform.OS === "ios" ? insets.top : (StatusBar.currentHeight ?? 24) + 8;
 
   async function load() {
     try {
@@ -183,107 +95,106 @@ export function SetlistsTab({ onOpenSong }: SongProps) {
   if (loading) return <Loader />;
 
   return (
-    // Task 3: plain ScrollView, no animation, no scroll handlers
-    <ScrollView
-      style={{ flex: 1, backgroundColor: C.bg }}
-      showsVerticalScrollIndicator={false}
-      overScrollMode="never"
-      bounces={false}
-      scrollEventThrottle={0}
-      contentContainerStyle={{ paddingTop: TOP, paddingBottom: 120 }}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-          tintColor={C.sky}
-        />
-      }>
-      {/* Task 7: header uses C.bg, correct top spacing via paddingTop on ScrollView */}
-      <View
-        style={[
-          s.headerBar,
-          {
-            borderBottomColor: C.border,
-            backgroundColor: C.bg,
-            paddingTop: TOP,
-          },
-        ]}>
-        <Text style={[s.headerTitle, { color: C.text, fontSize: fs(16) }]}>
-          {t.setlists}
-        </Text>
-      </View>
+    <View style={{ flex: 1, backgroundColor: C.bg }}>
+      <GlassHeader
+        title={t.setlists}
+        blurTarget={setlistsBlurTarget}
+        style={styles.floatingGlassHeader}
+      />
 
-      {setlists.length === 0 ? (
-        <EmptyState
-          icon={<Feather name="calendar" size={22} color={C.sky} />}
-          text="No setlists yet."
-        />
-      ) : (
-        setlists.map((sl) => {
-          const songs: Song[] = sl.songIds || [];
-          return (
-            <PlatformBlur
-              key={sl._id}
-              style={[
-                s.card,
-                { borderColor: C.border },
-              ]}
-              isDark={isDark}
-              borderRadius={Radius.md}
-              gradientColors={
-                isDark ? [C.surfaceHigh, C.surface] : [C.surface, C.bgDeep]
-              }
-              gradientOpacity={0.36}>
-              <View
-                style={[
-                  s.cardHdr,
-                  { borderBottomColor: C.border, backgroundColor: C.skyPale },
-                ]}>
-                <View style={[s.dateBadge, { backgroundColor: C.sky }]}>
-                  <Text style={[s.dateText, { color: C.bg }]}>{sl.date}</Text>
-                </View>
-                <Text
-                  style={[s.cardTheme, { color: C.text }]}
-                  numberOfLines={1}>
-                  {sl.title}
-                </Text>
-                <Text style={[s.cardCnt, { color: C.text2 }]}>
-                  {songs.length} {t.songs2}
-                </Text>
-              </View>
-
-              {songs.map((song, i) => (
-                <TouchableOpacity
-                  key={song._id}
+      <BlurTargetView ref={setlistsBlurTarget} style={styles.scrollTarget}>
+        <ScrollView
+          style={{ flex: 1 }}
+          showsVerticalScrollIndicator={false}
+          overScrollMode="never"
+          bounces={false}
+          scrollEventThrottle={0}
+          contentContainerStyle={{
+            paddingTop: insets.top + 88,
+            paddingBottom: 100 + insets.bottom,
+          }}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={C.sky}
+            />
+          }>
+        {setlists.length === 0 ? (
+          <EmptyState
+            icon={<Feather name="calendar" size={22} color={C.sky} />}
+            text={t.noSetlists}
+          />
+        ) : (
+          setlists.map((sl) => {
+            const songs: Song[] = sl.songIds || [];
+            return (
+              <PlatformBlur
+                key={sl._id}
+                style={[s.card, { borderColor: C.border }]}
+                isDark={isDark}
+                borderRadius={Radius.md}
+                gradientColors={
+                  isDark ? [C.surfaceHigh, C.surface] : [C.surface, C.bgDeep]
+                }
+                gradientOpacity={0.36}>
+                <View
                   style={[
-                    s.songRow,
-                    i < songs.length - 1 && [
-                      s.songBorder,
-                      { borderBottomColor: C.border },
-                    ],
-                  ]}
-                  onPress={() => onOpenSong(song)}
-                  activeOpacity={0.75}
-                  {...({ android_ripple: null } as any)}>
-                  <Text style={[s.songNum, { color: C.sky }]}>{i + 1}</Text>
-                  <Text
-                    style={[s.songName, { color: C.text, flex: 1 }]}
-                    numberOfLines={1}>
-                    {song.title}
-                  </Text>
-                  <View style={[s.keyChip, { backgroundColor: C.skyPale }]}>
-                    <Text style={[s.keyChipText, { color: C.sky }]}>
-                      {song.key}
-                    </Text>
+                    s.cardHdr,
+                    {
+                      borderBottomColor: C.border,
+                      backgroundColor: C.skyPale,
+                    },
+                  ]}>
+                  <View style={[s.dateBadge, { backgroundColor: C.sky }]}>
+                    <Text style={[s.dateText, { color: C.bg }]}>{sl.date}</Text>
                   </View>
-                </TouchableOpacity>
-              ))}
-            </PlatformBlur>
-          );
-        })
-      )}
-      <View style={{ height: 20 }} />
-    </ScrollView>
+                  <Text
+                    style={[s.cardTheme, { color: C.text }]}
+                    numberOfLines={1}>
+                    {sl.title === "Untitled setlist"
+                      ? t.untitledSetlist
+                      : sl.title}
+                  </Text>
+                  <Text style={[s.cardCnt, { color: C.text2 }]}>
+                    {songs.length} {t.songs2}
+                  </Text>
+                </View>
+
+                {songs.map((song, i) => (
+                  <TouchableOpacity
+                    key={song._id}
+                    style={[
+                      s.songRow,
+                      i < songs.length - 1 && [
+                        s.songBorder,
+                        { borderBottomColor: C.border },
+                      ],
+                    ]}
+                    onPress={() => onOpenSong(song)}
+                    activeOpacity={0.75}
+                    {...({ android_ripple: null } as any)}>
+                    <Text style={[s.songNum, { color: C.sky }]}>{i + 1}</Text>
+                    <Text
+                      style={[s.songName, { color: C.text, flex: 1 }]}
+                      numberOfLines={1}>
+                      {song.title}
+                    </Text>
+                    <View style={[s.keyChip, { backgroundColor: C.skyPale }]}>
+                      <Text style={[s.keyChipText, { color: C.sky }]}>
+                        {song.key}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </PlatformBlur>
+            );
+          })
+        )}
+        <View style={{ height: 20 }} />
+        </ScrollView>
+      </BlurTargetView>
+    </View>
   );
 }
 
@@ -293,31 +204,30 @@ export function FavoritesTab({
   onBackToSongs,
   allSongs = [],
 }: SongProps) {
-  const { t, profile, fs } = useApp();
+  const { t, profile } = useApp();
   const { C, isDark } = useTheme();
   const insets = useSafeAreaInsets();
+  const favoritesBlurTarget = React.useRef<View | null>(null);
   const [songs, setSongs] = useState<Song[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const loadRequestRef = React.useRef(0);
 
-  // Task 7: correct top spacing
-  const TOP =
-    Platform.OS === "ios" ? insets.top : (StatusBar.currentHeight ?? 24) + 8;
-
-  const CARD_HEIGHT = 92;
+  const CARD_HEIGHT = 120;
   const CARD_GAP = Spacing.md;
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (refreshServer = true) => {
+    const requestId = ++loadRequestRef.current;
     try {
-      const localSongs = await favoritesService.getLocalSongs();
-      if (localSongs.length > 0) {
+      const localSongs = await favoritesService.getLocalSongs(allSongs);
+      if (requestId === loadRequestRef.current) {
         setSongs(localSongs);
         setLoading(false);
       }
 
-      if (profile) {
+      if (refreshServer && profile) {
         const serverSongs = await favoritesService.refreshFromServer(profile);
-        if (serverSongs !== null) {
+        if (serverSongs !== null && requestId === loadRequestRef.current) {
           setSongs(serverSongs ?? []);
         }
       }
@@ -326,11 +236,13 @@ export function FavoritesTab({
     } finally {
       setLoading(false);
     }
-  }, [profile]);
+  }, [allSongs, profile]);
 
   useEffect(() => {
     load();
-    const unsub = subscribe("favorites:changed", load);
+    const unsub = subscribe("favorites:changed", () => {
+      void load(false);
+    });
     return () => unsub();
   }, [load]);
 
@@ -339,6 +251,21 @@ export function FavoritesTab({
     await load();
     setRefreshing(false);
   };
+
+  const handleRemoveFavorite = useCallback(
+    async (songId: string) => {
+      try {
+        const { favorited } = await favoritesService.toggle(songId, profile);
+        if (!favorited) {
+          setSongs((current) => current.filter((song) => song._id !== songId));
+        }
+      } catch (error) {
+        console.error("Could not remove favorite:", error);
+        Alert.alert(t.error, t.favoriteUpdateError);
+      }
+    },
+    [profile, t],
+  );
 
   if (loading) return <Loader />;
 
@@ -351,7 +278,7 @@ export function FavoritesTab({
     };
   });
 
-  const getItemLayout = (_: any, index: number) => ({
+  const getItemLayout = (_: unknown, index: number) => ({
     length: CARD_HEIGHT,
     offset: (CARD_HEIGHT + CARD_GAP) * index,
     index,
@@ -359,117 +286,85 @@ export function FavoritesTab({
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
-      {/* Task 7: header uses C.bg, paddingTop = safe area inset */}
-      <View
-        style={[
-          ss.headerBar,
-          {
-            paddingTop: TOP,
-            borderBottomColor: C.border,
-            backgroundColor: C.bg,
-          },
-        ]}>
-        <TouchableOpacity
-          onPress={() => onBackToSongs?.()}
-          disabled={!onBackToSongs}
-          activeOpacity={0.75}
-          style={ss.glassBtn}>
-          <View
-            style={[
-              StyleSheet.absoluteFill,
-              ss.glassBtnBg,
-              {
-                backgroundColor: isDark
-                  ? "rgba(255,255,255,0.07)"
-                  : "rgba(255,255,255,0.80)",
-                borderColor: isDark
-                  ? "rgba(255,255,255,0.13)"
-                  : "rgba(4,57,84,0.10)",
-              },
-            ]}
-          />
-          <LinearGradient
-            colors={["rgba(255,255,255,0.14)", "rgba(255,255,255,0.03)"]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0, y: 1 }}
-            style={StyleSheet.absoluteFill}
-          />
-          <View
-            style={[
-              ss.glassBtnSheen,
-              {
-                backgroundColor: isDark
-                  ? "rgba(255,255,255,0.20)"
-                  : "rgba(255,255,255,0.95)",
-              },
-            ]}
-          />
-          <Feather
-            name="chevron-left"
-            size={19}
-            color={isDark ? "rgba(240,248,255,0.94)" : "#12344d"}
-          />
-        </TouchableOpacity>
-        <Text style={[ss.headerTitle, { color: C.text, fontSize: fs(15) }]}>
-          {t.favs}
-        </Text>
-        <View style={{ width: 10 }} />
-      </View>
+      <GlassHeader
+        title={t.favs}
+        onBack={onBackToSongs}
+        backAccessibilityLabel={t.back}
+        blurTarget={favoritesBlurTarget}
+        style={styles.floatingGlassHeader}
+      />
 
       {/* Task 3: plain FlatList, no scroll animation */}
-      <FlatList
-        data={numberedSongs}
-        keyExtractor={(item) => item._id}
-        renderItem={({ item }) => (
-          <FavoriteSongCard
-            item={item}
-            isDark={isDark}
-            C={C}
-            onOpenSong={onOpenSong}
-          />
-        )}
-        ListEmptyComponent={
-          <EmptyState
-            icon={<Feather name="heart" size={22} color={C.sky} />}
-            text={t.noFavs}
-          />
-        }
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={C.sky}
-          />
-        }
-        showsVerticalScrollIndicator={false}
-        overScrollMode="never"
-        bounces={false}
-        scrollEventThrottle={0}
-        contentContainerStyle={{
-          paddingTop: 10,
-          paddingBottom: 160,
-        }}
-        getItemLayout={getItemLayout}
-        removeClippedSubviews={false}
-        maxToRenderPerBatch={12}
-        windowSize={11}
-        initialNumToRender={10}
-        updateCellsBatchingPeriod={50}
-      />
+      <BlurTargetView ref={favoritesBlurTarget} style={styles.scrollTarget}>
+        <FlatList
+          data={numberedSongs}
+          keyExtractor={(item) => item._id}
+          renderItem={({ item, index }) => (
+            <AnimatedSongCard
+              item={item}
+              index={index}
+              isDark={isDark}
+              C={C}
+              onOpenSong={onOpenSong}
+              onRemoveFavorite={() => void handleRemoveFavorite(item._id)}
+              removeFavoriteLabel={t.removeFav}
+            />
+          )}
+          ListEmptyComponent={
+            <EmptyState
+              icon={<Feather name="heart" size={22} color={C.sky} />}
+              text={t.noFavs}
+            />
+          }
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={C.sky}
+            />
+          }
+          showsVerticalScrollIndicator={false}
+          overScrollMode="never"
+          bounces={false}
+          scrollEventThrottle={0}
+          contentContainerStyle={{
+            paddingTop: insets.top + 88,
+            paddingHorizontal: Spacing.lg,
+            paddingBottom: 100 + insets.bottom,
+          }}
+          getItemLayout={getItemLayout}
+          removeClippedSubviews={false}
+          maxToRenderPerBatch={12}
+          windowSize={11}
+          initialNumToRender={10}
+          updateCellsBatchingPeriod={50}
+        />
+      </BlurTargetView>
     </View>
   );
 }
 
+const styles = StyleSheet.create({
+  scrollTarget: {
+    flex: 1,
+  },
+  floatingGlassHeader: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+    elevation: 10,
+  },
+});
+
 // ── NOTIFICATIONS TAB ─────────────────────────────────────────
 export function NotificationsTab() {
-  const { t, fs } = useApp();
+  const { t } = useApp();
   const { C } = useTheme();
   const insets = useSafeAreaInsets();
   const [notifs, setNotifs] = useState<Notif[]>([]);
   const [loading, setLoading] = useState(true);
-
-  const TOP =
-    Platform.OS === "ios" ? insets.top : (StatusBar.currentHeight ?? 24) + 8;
 
   useEffect(() => {
     api.notifications
@@ -500,18 +395,14 @@ export function NotificationsTab() {
       overScrollMode="never"
       bounces={false}
       scrollEventThrottle={0}
-      contentContainerStyle={{ paddingTop: TOP, paddingBottom: 120 }}>
-      <View style={[ns.hdr, { borderBottomColor: C.border }]}>
-        <Feather name="bell" size={16} color={C.sky} />
-        <Text style={[ns.hdrText, { color: C.text, fontSize: fs(15) }]}>
-          {t.notifTitle}
-        </Text>
-      </View>
-
+      contentContainerStyle={{
+        paddingTop: insets.top + 8,
+        paddingBottom: 100 + insets.bottom,
+      }}>
       {notifs.length === 0 ? (
         <EmptyState
           icon={<Feather name="bell" size={22} color={C.sky} />}
-          text="No notifications yet."
+          text={t.noNotifications}
         />
       ) : (
         notifs.map((n, i) => (
@@ -542,7 +433,6 @@ export function NotificationsTab() {
           </View>
         ))
       )}
-      <View style={{ height: 120 }} />
     </ScrollView>
   );
 }
@@ -550,14 +440,6 @@ export function NotificationsTab() {
 // ── STYLES ────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
-  headerBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-  },
-  headerTitle: { fontSize: 16, fontWeight: "700" },
   card: {
     marginHorizontal: Spacing.lg,
     marginBottom: 12,
@@ -591,97 +473,7 @@ const s = StyleSheet.create({
   keyChipText: { fontSize: 10, fontWeight: "700" },
 });
 
-const ss = StyleSheet.create({
-  headerBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    paddingHorizontal: Spacing.lg,
-    paddingBottom: 14,
-    borderBottomWidth: 1,
-  },
-  headerTitle: { fontSize: 15, fontWeight: "700", flex: 1 },
-  songCardWrap: {
-    borderRadius: 16,
-    overflow: "hidden",
-    marginBottom: Spacing.md,
-  },
-  songCard: {
-    borderRadius: 16,
-    borderWidth: 0.5,
-    padding: Spacing.lg,
-    ...Platform.select({
-      ios: {
-        shadowOpacity: 0.12,
-        shadowRadius: 10,
-        shadowOffset: { width: 0, height: 4 },
-      },
-      android: { elevation: 4 },
-    }),
-  },
-  songCardContent: { flex: 1 },
-  songHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.md,
-  },
-  artContainer: {
-    width: 46,
-    height: 46,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-  },
-  songInfo: { flex: 1, minWidth: 0 },
-  songTitle: { fontSize: 15, fontWeight: "700" },
-  songMeta: { fontSize: 12, marginTop: 3 },
-  songFooter: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginTop: Spacing.md,
-    paddingTop: Spacing.sm,
-    borderTopWidth: 0.5,
-  },
-  songNumber: { fontSize: 18, fontWeight: "700", letterSpacing: 0.5 },
-  keyChip: { borderRadius: 6, paddingHorizontal: 10, paddingVertical: 4 },
-  keyChipText: { fontSize: 11, fontWeight: "700" },
-  glassBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    overflow: "hidden",
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
-  },
-  glassBtnBg: {
-    ...StyleSheet.absoluteFillObject,
-    borderRadius: 12,
-    borderWidth: 0.5,
-  },
-  glassBtnSheen: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 1,
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
-  },
-});
-
 const ns = StyleSheet.create({
-  hdr: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-  },
-  hdrText: { fontSize: 15, fontWeight: "700", flex: 1 },
   item: {
     flexDirection: "row",
     alignItems: "flex-start",

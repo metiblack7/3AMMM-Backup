@@ -11,9 +11,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Feather } from "@expo/vector-icons";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/AppContext";
-import { useTheme } from "../../lib/useTheme";
-import { Spacing, Radius } from "../../theme";
-import PlatformBlur from "../../components/PlatformBlur";
+import { Spacing } from "../../theme";
 import { Song } from "../LyricsScreen";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -29,10 +27,12 @@ interface Props {
   onNavigateTab?: (tab: "songs" | "favs") => void;
 }
 
-function HomeTabComponent({ onOpenSong, onNavigateTab }: Props) {
+function HomeTabComponent({
+  onOpenSong,
+  onNavigateTab,
+}: Props) {
   const insets = useSafeAreaInsets();
   const { profile, t, fs } = useApp();
-  const { C, isDark } = useTheme();
 
   const [songs, setSongs] = useState<Song[]>([]);
   const [setlists, setSetlists] = useState<Setlist[]>([]);
@@ -143,65 +143,64 @@ function HomeTabComponent({ onOpenSong, onNavigateTab }: Props) {
     [nextSetlist, songs],
   );
 
-  const heroGradient: [string, string] = isDark
-    ? [C.surface, C.bg]
-    : [C.bgDeep, C.bg];
-
-  const isGuestProfile =
-    !!profile && String(profile._id || "").startsWith("guest_");
-  const homeTitle = isGuestProfile
-    ? t.homeTitle
-    : profile?.name?.split(" ")[0] || t.homeTitle;
-
-  const card1Gradient: [string, string] = isDark
-    ? [C.navyLight, C.navy]
-    : [C.surface, C.bgDeep];
-  const card2Gradient: [string, string] = isDark
-    ? [C.surfaceHigh, C.surface]
-    : [C.surface, C.bgDeep];
-  const setlistGradient: [string, string] = isDark
-    ? [C.surfaceHigh, C.bg]
-    : [C.surface, C.bgDeep];
-
-  const s = makeStyles(C, isDark, insets.top);
+  const s = makeStyles();
 
   return (
-    <View style={{ flex: 1, backgroundColor: C.bg }}>
+    <View style={s.screen}>
       <ScrollView
         showsVerticalScrollIndicator={false}
+        contentContainerStyle={{
+          paddingTop: insets.top + 8,
+          paddingBottom: 100 + insets.bottom,
+        }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor={C.sky}
+            tintColor="#87ceeb"
           />
         }>
-        {/* HERO */}
+        {/* HERO BANNER */}
         <LinearGradient
-          colors={heroGradient}
+          colors={["#021624", "#032538"]}
           start={{ x: 0, y: 0 }}
-          end={{ x: 0, y: 1 }}
-          style={s.hero}>
-          <Text style={[s.greet, { fontSize: fs(13) }]}>{t.greeting}</Text>
-          <Text style={[s.name, { fontSize: fs(32) }]}>{homeTitle}</Text>
-          <Text style={[s.verse, { fontSize: fs(12) }]}>{t.verse}</Text>
+          end={{ x: 1, y: 1 }}
+          style={s.heroBanner}>
+          <View style={s.heroDecoration} />
+          <Feather
+            name="music"
+            size={64}
+            color="rgba(135,206,235,0.15)"
+            style={s.heroIcon}
+          />
+          <View style={s.heroText}>
+            <Text style={s.heroEyebrow}>{t.homeHeroDay}</Text>
+            <Text style={[s.heroTitle, { fontSize: fs(32) }]}>
+              {t.homeHeroWorship}
+            </Text>
+            <Text
+              style={[
+                s.heroTitle,
+                s.heroTitleAccent,
+                s.heroWelcome,
+                { fontSize: fs(26) },
+              ]}>
+              {t.homeHeroService}
+            </Text>
+            <View style={s.heroGoldLine} />
+          </View>
         </LinearGradient>
 
         {/* QUICK STATS */}
         <View style={s.cardsRow}>
-          {/* ALL SONGS CARD */}
           <TouchableOpacity
             style={{ flex: 1 }}
             activeOpacity={0.85}
             onPress={() => handleNavigateTab("songs")}>
-            <PlatformBlur
-              style={[s.card, s.cardLeft]}
-              borderRadius={Radius.lg}
-              isDark={isDark}
-              gradientColors={card1Gradient}
-              gradientOpacity={0.48}>
+            <View style={s.card}>
+              <View style={s.cardDecoration} />
               <View style={s.cardIconBox}>
-                <Feather name="music" size={24} color={C.sky} />
+                <Feather name="music" size={20} color="#87ceeb" />
               </View>
               <Text style={[s.cardNum, { fontSize: fs(28) }]}>
                 {songs.length}
@@ -209,28 +208,23 @@ function HomeTabComponent({ onOpenSong, onNavigateTab }: Props) {
               <Text style={[s.cardLabel, { fontSize: fs(12) }]}>
                 {t.allSongs}
               </Text>
-            </PlatformBlur>
+            </View>
           </TouchableOpacity>
 
-          {/* FAVORITES CARD */}
           <TouchableOpacity
             style={{ flex: 1 }}
             activeOpacity={0.85}
             onPress={() => handleNavigateTab("favs")}>
-            <PlatformBlur
-              style={[s.card, s.cardRight]}
-              borderRadius={Radius.lg}
-              isDark={isDark}
-              gradientColors={card2Gradient}
-              gradientOpacity={0.48}>
+            <View style={s.card}>
+              <View style={s.cardDecoration} />
               <View style={s.cardIconBox}>
-                <Feather name="heart" size={24} color={C.sky} />
+                <Feather name="heart" size={20} color="#87ceeb" />
               </View>
               <Text style={[s.cardNum, { fontSize: fs(28) }]}>{favCount}</Text>
               <Text style={[s.cardLabel, { fontSize: fs(12) }]}>
                 {t.myFavs}
               </Text>
-            </PlatformBlur>
+            </View>
           </TouchableOpacity>
         </View>
 
@@ -238,32 +232,17 @@ function HomeTabComponent({ onOpenSong, onNavigateTab }: Props) {
         {nextSetlist && (
           <>
             <View style={s.secHdr}>
-              <Feather name="calendar" size={18} color={C.sky} />
               <Text style={[s.secTitle, { fontSize: fs(16) }]}>
                 {t.nextSat}
               </Text>
+              <Text style={s.seeAll}>{t.seeAll}</Text>
             </View>
 
             <View style={s.nextSlCardWrap}>
-              <PlatformBlur
-                style={s.nextSlCard}
-                borderRadius={Radius.lg}
-                isDark={isDark}
-                gradientColors={setlistGradient}
-                gradientOpacity={0.42}>
+              <View style={s.nextSlCard}>
                 <View style={s.nextSlHdr}>
-                  <View
-                    style={[
-                      s.dateBadge,
-                      {
-                        backgroundColor: C.skyPale,
-                        borderWidth: 1,
-                        borderColor: C.skyBorder,
-                      },
-                    ]}>
-                    <Text style={[s.dateText, { color: C.sky }]}>
-                      {nextSetlist.date}
-                    </Text>
+                  <View style={s.dateBadge}>
+                    <Text style={s.dateText}>{nextSetlist.date}</Text>
                   </View>
 
                   <Text
@@ -273,9 +252,7 @@ function HomeTabComponent({ onOpenSong, onNavigateTab }: Props) {
                   </Text>
 
                   <View style={s.slCountBadge}>
-                    <Text style={[s.slCountText, { color: C.sky }]}>
-                      {nextSongs.length}
-                    </Text>
+                    <Text style={s.slCountText}>{nextSongs.length}</Text>
                   </View>
                 </View>
 
@@ -289,12 +266,12 @@ function HomeTabComponent({ onOpenSong, onNavigateTab }: Props) {
                     onPress={() => onOpenSong(song)}
                     activeOpacity={0.7}
                     {...({ android_ripple: null } as any)}>
-                    <Text style={[s.slNum, { color: C.sky, fontSize: fs(12) }]}>
+                    <Text style={[s.slNum, { fontSize: fs(12) }]}>
                       {i + 1}
                     </Text>
                     <View style={{ flex: 1, minWidth: 0 }}>
                       <Text
-                        style={[s.slName, { fontSize: fs(14), color: C.text }]}
+                        style={[s.slName, { fontSize: fs(14) }]}
                         numberOfLines={1}>
                         {song.title}
                       </Text>
@@ -302,20 +279,12 @@ function HomeTabComponent({ onOpenSong, onNavigateTab }: Props) {
                         {song.singerName}
                       </Text>
                     </View>
-                    <View
-                      style={[s.slKeyChip, { backgroundColor: C.goldDeep }]}>
-                      <Text style={[s.slKeyText, { color: C.gold }]}>
-                        {song.key}
-                      </Text>
-                    </View>
                   </TouchableOpacity>
                 ))}
-              </PlatformBlur>
+              </View>
             </View>
           </>
         )}
-
-        <View style={{ height: 120 }} />
       </ScrollView>
     </View>
   );
@@ -323,116 +292,151 @@ function HomeTabComponent({ onOpenSong, onNavigateTab }: Props) {
 
 export default React.memo(HomeTabComponent);
 
-const makeStyles = (C: any, isDark: boolean, topInset: number) =>
+const makeStyles = () =>
   StyleSheet.create({
-    hero: {
-      paddingHorizontal: Spacing.lg,
-      paddingTop: topInset + Spacing.xl,
-      paddingBottom: Spacing.xxl,
-      borderBottomWidth: 0.5,
-      borderBottomColor: C.border,
+    screen: { flex: 1, backgroundColor: "#010f18" },
+    heroBanner: {
+      height: 200,
+      margin: Spacing.lg,
+      marginTop: 6,
+      borderRadius: 20,
+      overflow: "hidden",
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: 18,
     },
-    greet: {
-      fontSize: 13,
-      fontWeight: "600",
-      color: C.sky,
-      marginBottom: 4,
-      textTransform: "uppercase",
-      letterSpacing: 0.5,
+    heroIcon: {
+      position: "absolute",
+      left: 18,
     },
-    name: {
-      fontSize: 32,
+    heroDecoration: {
+      position: "absolute",
+      width: 120,
+      height: 120,
+      borderRadius: 60,
+      bottom: -34,
+      right: -24,
+      backgroundColor: "rgba(135,206,235,0.06)",
+    },
+    heroText: {
+      marginLeft: 70,
+      zIndex: 1,
+    },
+    heroEyebrow: {
+      color: "#87ceeb",
+      fontSize: 11,
       fontWeight: "700",
-      color: C.text,
-      marginBottom: Spacing.md,
+      letterSpacing: 2,
+      marginBottom: 3,
     },
-    verse: {
-      fontSize: 12,
-      color: C.text2,
-      lineHeight: 18,
-      fontStyle: "italic",
+    heroTitle: {
+      color: "#ffffff",
+      fontWeight: "800",
+      lineHeight: 36,
+    },
+    heroTitleAccent: { color: "#87ceeb" },
+    heroWelcome: {
+      fontWeight: "400",
+      lineHeight: 32,
+    },
+    heroGoldLine: {
+      width: 40,
+      height: 2,
+      borderRadius: 1,
+      backgroundColor: "#fbb040",
+      marginTop: 10,
     },
     cardsRow: {
       flexDirection: "row",
-      gap: Spacing.md,
+      gap: 10,
       paddingHorizontal: Spacing.lg,
-      marginTop: -12,
-      marginBottom: Spacing.xl,
+      marginBottom: 20,
     },
     card: {
-      flex: 1,
-      borderRadius: Radius.lg,
-      borderWidth: isDark ? 0.5 : 1,
-      borderColor: isDark ? C.glassBorder : C.border,
-      padding: Spacing.lg,
-      alignItems: "center",
+      minHeight: 148,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: "rgba(135,206,235,0.10)",
+      backgroundColor: "#021624",
+      padding: 16,
+      overflow: "hidden",
     },
-    cardLeft: { borderBottomLeftRadius: Radius.lg },
-    cardRight: { borderBottomRightRadius: Radius.lg },
+    cardDecoration: {
+      position: "absolute",
+      width: 60,
+      height: 60,
+      borderRadius: 30,
+      top: -16,
+      right: -16,
+      backgroundColor: "rgba(135,206,235,0.05)",
+    },
     cardIconBox: {
-      width: 48,
-      height: 48,
-      borderRadius: Radius.md,
-      backgroundColor: isDark ? C.skyGlowSoft : C.skyPale,
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: "rgba(135,206,235,0.10)",
       alignItems: "center",
       justifyContent: "center",
-      marginBottom: Spacing.md,
+      marginBottom: 8,
     },
     cardNum: {
-      fontSize: 28,
       fontWeight: "700",
-      color: C.text,
+      color: "#ffffff",
     },
     cardLabel: {
-      fontSize: 12,
       fontWeight: "600",
-      color: C.text2,
-      textAlign: "center",
+      color: "rgba(135,206,235,0.75)",
     },
     secHdr: {
       flexDirection: "row",
       alignItems: "center",
-      gap: Spacing.md,
+      gap: 10,
       paddingHorizontal: Spacing.lg,
-      paddingVertical: Spacing.lg,
+      paddingVertical: 12,
     },
     secTitle: {
-      fontSize: 16,
-      fontWeight: "700",
-      color: C.text,
+      fontWeight: "600",
+      color: "#ffffff",
       flex: 1,
+    },
+    seeAll: {
+      color: "rgba(135,206,235,0.65)",
+      fontSize: 12,
     },
     nextSlCardWrap: {
       marginHorizontal: Spacing.lg,
       marginBottom: Spacing.lg,
-      borderRadius: Radius.lg,
+      borderRadius: 20,
       overflow: "hidden",
     },
     nextSlCard: {
-      borderRadius: Radius.lg,
-      borderWidth: isDark ? 0.5 : 1,
-      borderColor: C.border,
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: "rgba(135,206,235,0.10)",
+      backgroundColor: "#021624",
     },
     nextSlHdr: {
       flexDirection: "row",
       alignItems: "center",
       padding: 14,
       borderBottomWidth: 0.5,
-      borderBottomColor: C.border,
+      borderBottomColor: "rgba(251,176,64,0.15)",
+      backgroundColor: "rgba(251,176,64,0.08)",
     },
     dateBadge: {
-      borderRadius: Radius.xs,
+      borderRadius: 8,
       paddingHorizontal: 10,
       paddingVertical: 5,
+      backgroundColor: "rgba(251,176,64,0.14)",
     },
     dateText: {
       fontSize: 11,
       fontWeight: "700",
+      color: "#fbb040",
     },
     slTheme: {
-      fontSize: 15,
       fontWeight: "700",
-      color: C.text,
+      color: "#ffffff",
       flex: 1,
       marginLeft: 10,
     },
@@ -440,42 +444,35 @@ const makeStyles = (C: any, isDark: boolean, topInset: number) =>
       borderRadius: 8,
       paddingHorizontal: 10,
       paddingVertical: 4,
+      backgroundColor: "rgba(251,176,64,0.12)",
     },
     slCountText: {
       fontSize: 12,
       fontWeight: "700",
+      color: "#fbb040",
     },
     slSong: {
       flexDirection: "row",
       alignItems: "center",
       paddingHorizontal: 16,
       paddingVertical: 12,
+      gap: 10,
     },
     slSongBorder: {
       borderBottomWidth: 0.5,
-      borderBottomColor: C.border,
+      borderBottomColor: "rgba(135,206,235,0.06)",
     },
     slNum: {
-      fontSize: 12,
       fontWeight: "700",
       width: 18,
+      color: "#fbb040",
     },
     slName: {
-      fontSize: 14,
       fontWeight: "600",
-      color: C.text,
+      color: "#ffffff",
     },
     slSinger: {
       fontSize: 12,
-      color: C.text2,
-    },
-    slKeyChip: {
-      borderRadius: Radius.xs,
-      paddingHorizontal: 8,
-      paddingVertical: 3,
-    },
-    slKeyText: {
-      fontSize: 10,
-      fontWeight: "700",
+      color: "#87ceeb",
     },
   });

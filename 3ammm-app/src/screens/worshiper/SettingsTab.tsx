@@ -21,6 +21,7 @@ import { useTheme } from "../../lib/useTheme";
 import { apiFetch } from "../../lib/api";
 import { Spacing, Radius } from "../../theme";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Feather } from "@expo/vector-icons";
 
 // ── TOGGLE ───────────────────────────────────────────────────
 interface ToggleProps {
@@ -172,8 +173,10 @@ const sl = StyleSheet.create({
 
 // ── SETTINGS TAB ─────────────────────────────────────────────
 export function SettingsTab({
+  onBackToSongs,
   onAdminLogin,
 }: {
+  onBackToSongs?: () => void;
   onAdminLogin?: () => void;
 }) {
   const {
@@ -191,7 +194,6 @@ export function SettingsTab({
 
   const { isDark, C } = useTheme();
   const insets = useSafeAreaInsets();
-  const TOP = insets.top;
 
   const PREVIEW = `ኪሊ ሳሉዋ ጋቲያ ጋዬ\nአሳ ናቱ ኡባ\nየሱሲ ኑ ዲኮ፣ ኤ ኢ ዲኮ`;
 
@@ -301,14 +303,32 @@ export function SettingsTab({
   const { appFontScale, setAppFontScale, fs } = useApp();
 
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: C.bg }}
-      showsVerticalScrollIndicator={false}
-      contentContainerStyle={{
-        paddingTop: TOP,
-        paddingHorizontal: Spacing.lg,
-        paddingBottom: 120,
-      }}>
+    <View style={{ flex: 1, backgroundColor: C.bg }}>
+      <View
+        style={[
+          s.settingsBackRow,
+          { paddingTop: insets.top + 8, borderBottomColor: C.border },
+        ]}>
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel={t.back}
+          onPress={onBackToSongs}
+          activeOpacity={0.75}
+          style={[
+            s.settingsBackButton,
+            { backgroundColor: C.surface, borderColor: C.border },
+          ]}>
+          <Feather name="chevron-left" size={20} color={C.text} />
+        </TouchableOpacity>
+      </View>
+      <ScrollView
+        style={{ flex: 1, backgroundColor: C.bg }}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{
+          paddingHorizontal: Spacing.lg,
+          paddingTop: Spacing.md,
+          paddingBottom: 100 + insets.bottom,
+        }}>
       {/* ── APPEARANCE ──────────────────────────── */}
       <Text style={[sectionTitle, { fontSize: fs(11) }]}>{t.appearance}</Text>
       <View style={card}>
@@ -761,11 +781,25 @@ export function SettingsTab({
         <Text style={[s.footerText, { color: C.text3 }]}>{t.credit}</Text>
         <View style={[s.footerLine, { backgroundColor: C.border }]} />
       </View>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
 const s = StyleSheet.create({
+  settingsBackRow: {
+    paddingHorizontal: Spacing.md,
+    paddingBottom: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  settingsBackButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 11,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   hiddenAdminAccess: {
     width: 40,
     height: 28,

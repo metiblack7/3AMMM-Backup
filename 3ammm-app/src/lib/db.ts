@@ -221,38 +221,36 @@ export const db = {
     async getAll(): Promise<string[]> {
       try {
         const data = await AsyncStorage.getItem(`${DB_PREFIX}favorites`);
-        return data ? JSON.parse(data) : [];
+        if (!data) return [];
+        const favorites: unknown = JSON.parse(data);
+        if (
+          !Array.isArray(favorites) ||
+          !favorites.every((songId) => typeof songId === 'string')
+        ) {
+          throw new Error('Stored favorites are invalid');
+        }
+        return favorites;
       } catch (err) {
         console.error('DB Error (favorites.getAll):', err);
-        return [];
+        throw err;
       }
     },
 
     async has(songId: string): Promise<boolean> {
-      try {
-        const favorites = await this.getAll();
-        return favorites.includes(songId);
-      } catch (err) {
-        console.error('DB Error (favorites.has):', err);
-        return false;
-      }
+      const favorites = await this.getAll();
+      return favorites.includes(songId);
     },
 
     async toggle(songId: string): Promise<boolean> {
-      try {
-        const favorites = await this.getAll();
-        const idx = favorites.indexOf(songId);
-        if (idx >= 0) {
-          favorites.splice(idx, 1);
-        } else {
-          favorites.push(songId);
-        }
-        await this.save(favorites);
-        return idx < 0; // true = now favorited
-      } catch (err) {
-        console.error('DB Error (favorites.toggle):', err);
-        return false;
+      const favorites = [...new Set(await this.getAll())];
+      const idx = favorites.indexOf(songId);
+      if (idx >= 0) {
+        favorites.splice(idx, 1);
+      } else {
+        favorites.push(songId);
       }
+      await this.save(favorites);
+      return idx < 0; // true = now favorited
     },
 
     async save(favorites: string[]): Promise<void> {
@@ -260,6 +258,7 @@ export const db = {
         await AsyncStorage.setItem(`${DB_PREFIX}favorites`, JSON.stringify(favorites));
       } catch (err) {
         console.error('DB Error (favorites.save):', err);
+        throw err;
       }
     },
 
@@ -268,6 +267,7 @@ export const db = {
         await AsyncStorage.removeItem(`${DB_PREFIX}favorites`);
       } catch (err) {
         console.error('DB Error (favorites.clear):', err);
+        throw err;
       }
     },
   },

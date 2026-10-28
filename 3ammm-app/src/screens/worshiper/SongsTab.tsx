@@ -41,13 +41,13 @@ interface Props {
   onSongsLoaded?: (songs: Song[]) => void; // ← exposes songs to parent
 }
 
-type NumberedSong = Song & { pageNumber: number };
+export type NumberedSong = Song & { pageNumber: number };
 
 const STAGGER_CAP = 280;
 const STAGGER_STEP = 45;
 
-const HEADER_CONTENT_HEIGHT = 118;
-const CARD_HEIGHT = 92;
+const HEADER_CONTENT_HEIGHT = 142;
+const CARD_HEIGHT = 120;
 const CARD_GAP = Spacing.md;
 const CARD_ROW_HEIGHT = CARD_HEIGHT + CARD_GAP;
 
@@ -55,18 +55,22 @@ function staggerDelay(index: number) {
   return Math.min((index % 10) * STAGGER_STEP, STAGGER_CAP);
 }
 
-const AnimatedSongCard = React.memo(function AnimatedSongCard({
+export const AnimatedSongCard = React.memo(function AnimatedSongCard({
   item,
   index,
   isDark,
   C,
   onOpenSong,
+  onRemoveFavorite,
+  removeFavoriteLabel,
 }: {
   item: NumberedSong;
   index: number;
   isDark: boolean;
   C: ReturnType<typeof useTheme>["C"];
   onOpenSong: (song: Song) => void;
+  onRemoveFavorite?: () => void;
+  removeFavoriteLabel?: string;
 }) {
   const gradientColors: [string, string] = isDark
     ? ["#082f41", "#00121e"]
@@ -125,7 +129,7 @@ const AnimatedSongCard = React.memo(function AnimatedSongCard({
               }),
             },
           ]}
-          borderRadius={16}
+          borderRadius={20}
           isDark={isDark}
           gradientColors={gradientColors}
           gradientOpacity={0.55}>
@@ -139,8 +143,10 @@ const AnimatedSongCard = React.memo(function AnimatedSongCard({
                 style={[
                   ss.artContainer,
                   {
-                    backgroundColor: isDark ? C.skyGlowSoft : C.skyPale,
-                    borderColor: C.skyBorder,
+                    backgroundColor: isDark
+                      ? "rgba(255,255,255,0.08)"
+                      : C.skyPale,
+                    borderColor: isDark ? C.glassBorder : C.border,
                   },
                 ]}>
                 <Feather
@@ -151,7 +157,9 @@ const AnimatedSongCard = React.memo(function AnimatedSongCard({
               </View>
 
               <View style={ss.songInfo}>
-                <Text style={[ss.songTitle, { color: C.text }]}>
+                <Text
+                  style={[ss.songTitle, { color: C.text }]}
+                  numberOfLines={1}>
                   {item.title}
                 </Text>
                 <Text style={[ss.songMeta, { color: C.text2, flexShrink: 1 }]}>
@@ -159,22 +167,52 @@ const AnimatedSongCard = React.memo(function AnimatedSongCard({
                 </Text>
               </View>
 
-              <Feather name="chevron-right" size={18} color={C.text3} />
+              {onRemoveFavorite ? (
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityLabel={removeFavoriteLabel}
+                  style={[
+                    ss.removeFavoriteButton,
+                    {
+                      backgroundColor: isDark
+                        ? "rgba(251,176,64,0.12)"
+                        : "rgba(212,146,14,0.12)",
+                    },
+                  ]}
+                  onPress={onRemoveFavorite}
+                  activeOpacity={0.75}
+                  hitSlop={8}>
+                  <Feather name="heart" size={18} color={C.gold} />
+                </TouchableOpacity>
+              ) : (
+                <Feather
+                  name="chevron-right"
+                  size={18}
+                  color={C.text3}
+                />
+              )}
             </View>
 
             <View
               style={[
-                ss.songFooter,
-                { borderTopColor: isDark ? C.glassBorder : C.border },
-              ]}>
+                ss.songDivider,
+                { backgroundColor: isDark ? C.glassBorder : C.border },
+              ]}
+            />
+
+            <View style={ss.songFooter}>
               <Text style={[ss.songNumber, { color: C.text3 }]}>
                 {item.pageNumber}
               </Text>
-              <View style={[ss.keyChip, { backgroundColor: C.goldDeep }]}>
-                <Text style={[ss.keyChipText, { color: C.gold }]}>
+              <LinearGradient
+                colors={[C.sky, C.skyDeep]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={ss.keyChip}>
+                <Text style={[ss.keyChipText, { color: C.bg }]}>
                   {item.key}
                 </Text>
-              </View>
+              </LinearGradient>
             </View>
           </TouchableOpacity>
         </PlatformBlur>
@@ -529,9 +567,9 @@ function SongsTabComponent({
     return (
       <SongsLoadingSkeleton
         topPadding={FULL_HEADER_HEIGHT}
-        bg={C.bg}
-        surface={C.surface}
-        border={C.border}
+        bg="#010f18"
+        surface="#021624"
+        border="rgba(135,206,235,0.10)"
       />
     );
   }
@@ -541,28 +579,30 @@ function SongsTabComponent({
       <View
         style={[
           es.errorWrap,
-          { backgroundColor: C.bg, paddingTop: FULL_HEADER_HEIGHT },
+          { backgroundColor: "#010f18", paddingTop: TOP_PADDING + 24 },
         ]}>
         <Feather
           name={isOnline ? "alert-circle" : "wifi-off"}
           size={40}
-          color={C.text3}
+          color="rgba(135,206,235,0.45)"
         />
-        <Text style={[es.errorTitle, { color: C.text }]}>
-          {isOnline ? "Could not load songs" : "You are offline"}
+        <Text style={[es.errorTitle, { color: "#ffffff" }]}>
+          {isOnline ? t.couldNotLoadSongs : t.youAreOffline}
         </Text>
         <Text style={[es.errorMsg, { color: C.danger }]}>{error}</Text>
         <TouchableOpacity
-          style={[es.retryBtn, { backgroundColor: C.sky }]}
+          style={[es.retryBtn, { backgroundColor: "#87ceeb" }]}
           onPress={() => load(true)}>
-          <Text style={[es.retryText, { color: C.bg }]}>Tap to retry</Text>
+          <Text style={[es.retryText, { color: "#010f18" }]}>
+            {t.tapToRetry}
+          </Text>
         </TouchableOpacity>
       </View>
     );
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: C.bg }}>
+    <View style={{ flex: 1, backgroundColor: "#010f18" }}>
       {/* ── SONG LIST ─────────────────────────────────────────── */}
       <FlatList
         ref={listRef}
@@ -571,23 +611,23 @@ function SongsTabComponent({
         renderItem={renderSongItem}
         ListEmptyComponent={
           <EmptyState
-            icon={<Feather name="music" size={22} color={C.sky} />}
-            text="No songs found."
+            icon={<Feather name="music" size={22} color="#87ceeb" />}
+            text={t.noSongsFound}
           />
         }
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor={C.sky}
+            tintColor="#87ceeb"
             progressViewOffset={FULL_HEADER_HEIGHT}
           />
         }
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{
-          paddingTop: FULL_HEADER_HEIGHT + Spacing.sm,
+          paddingTop: FULL_HEADER_HEIGHT + Spacing.xs,
           paddingHorizontal: Spacing.lg,
-          paddingBottom: 160,
+          paddingBottom: 100 + insets.bottom,
         }}
         removeClippedSubviews={false}
         maxToRenderPerBatch={12}
@@ -609,16 +649,12 @@ function SongsTabComponent({
         }}
       />
 
-      {/* ── HEADER ────────────────────────────────────────────── */}
+      {/* ── SEARCH AND FILTER CONTROLS ─────────────────────────── */}
       <Animated.View
         pointerEvents="auto"
         style={[
           hs.headerWrap,
-          {
-            paddingTop: TOP_PADDING,
-            backgroundColor: C.bg,
-            opacity: listFade,
-          },
+          { opacity: listFade, paddingTop: TOP_PADDING + Spacing.sm },
         ]}>
         <View
           style={{
@@ -626,36 +662,39 @@ function SongsTabComponent({
             paddingTop: Spacing.md,
             paddingBottom: 6,
           }}>
-          <View
-            style={[
-              ss.searchBox,
-              {
-                backgroundColor: C.surface,
-                borderColor: C.border,
-                ...Platform.select({
-                  ios: {
-                    shadowColor: isDark ? C.sky : C.navy,
-                    shadowOpacity: isDark ? 0.1 : 0.06,
-                  },
-                  android: {},
-                }),
-              },
-            ]}>
-            <Feather name="search" size={17} color={C.sky} />
-            <TextInput
-              style={[ss.searchInput, { color: C.text }]}
-              value={query}
-              onChangeText={setQuery}
-              placeholder={t.search}
-              placeholderTextColor={C.text3}
-            />
-            {query ? (
-              <TouchableOpacity
-                onPress={() => setQuery("")}
-                activeOpacity={0.7}>
-                <Feather name="x" size={16} color={C.text3} />
-              </TouchableOpacity>
-            ) : null}
+          <View style={ss.searchControlsRow}>
+            <View
+              style={[
+                ss.searchBox,
+                {
+                  flex: 1,
+                  backgroundColor: C.surface,
+                  borderColor: C.border,
+                  ...Platform.select({
+                    ios: {
+                      shadowColor: "#000000",
+                      shadowOpacity: 0.2,
+                    },
+                    android: {},
+                  }),
+                },
+              ]}>
+              <Feather name="search" size={17} color={C.sky} />
+              <TextInput
+                style={[ss.searchInput, { color: C.text }]}
+                value={query}
+                onChangeText={setQuery}
+                placeholder={t.search}
+                placeholderTextColor={C.text3}
+              />
+              {query ? (
+                <TouchableOpacity
+                  onPress={() => setQuery("")}
+                  activeOpacity={0.7}>
+                  <Feather name="x" size={16} color={C.text3} />
+                </TouchableOpacity>
+              ) : null}
+            </View>
           </View>
         </View>
 
@@ -671,13 +710,13 @@ function SongsTabComponent({
                   ss.pill,
                   {
                     borderColor:
-                      singerFilter === s ? "transparent" : C.skyBorder,
+                      singerFilter === s
+                        ? "transparent"
+                        : C.border,
                     backgroundColor:
                       singerFilter === s
                         ? "transparent"
-                        : isDark
-                          ? C.glass
-                          : C.surface,
+                        : C.surface,
                   },
                 ]}
                 onPress={() => setSingerFilter(s)}
@@ -685,7 +724,7 @@ function SongsTabComponent({
                 {...({ android_ripple: null } as any)}>
                 {singerFilter === s ? (
                   <LinearGradient
-                    colors={[C.sky, C.skyDeep]}
+                    colors={[C.sky, C.skyMid]}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 0 }}
                     style={ss.pillGradient}>
@@ -694,13 +733,16 @@ function SongsTabComponent({
                         ss.pillTextOn,
                         { color: C.bg, fontSize: fs(13) },
                       ]}>
-                      {s}
+                      {s === "All" ? t.all : s}
                     </Text>
                   </LinearGradient>
                 ) : (
                   <Text
-                    style={[ss.pillText, { color: C.text2, fontSize: fs(13) }]}>
-                    {s}
+                    style={[
+                      ss.pillText,
+                      { color: C.text2, fontSize: fs(13) },
+                    ]}>
+                    {s === "All" ? t.all : s}
                   </Text>
                 )}
               </TouchableOpacity>
@@ -793,18 +835,24 @@ const hs = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
+    backgroundColor: "transparent",
   },
 });
 
 const ss = StyleSheet.create({
+  searchControlsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+  },
   searchBox: {
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.sm,
     borderWidth: 1,
-    borderRadius: 14,
+    borderRadius: 16,
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    height: 52,
     ...Platform.select({
       ios: {
         shadowOpacity: 0.08,
@@ -819,6 +867,7 @@ const ss = StyleSheet.create({
     fontSize: 15,
     fontWeight: "500",
     paddingVertical: 0,
+    color: "#ffffff",
   },
   pillsContent: {
     paddingHorizontal: Spacing.lg,
@@ -830,7 +879,7 @@ const ss = StyleSheet.create({
     borderRadius: 999,
     borderWidth: 1,
     overflow: "hidden",
-    minHeight: 38,
+    minHeight: 40,
     justifyContent: "center",
     flexShrink: 0,
     alignSelf: "flex-start",
@@ -856,9 +905,9 @@ const ss = StyleSheet.create({
     flexShrink: 0,
     textAlign: "center",
   },
-  songCardWrap: { borderRadius: 16, overflow: "hidden" },
+  songCardWrap: { borderRadius: 20, overflow: "hidden" },
   songCard: {
-    borderRadius: 16,
+    borderRadius: 20,
     borderWidth: 0.5,
     padding: Spacing.lg,
     ...Platform.select({
@@ -871,36 +920,56 @@ const ss = StyleSheet.create({
     }),
   },
   songCardContent: { flex: 1 },
+  removeFavoriteButton: {
+    width: 36,
+    height: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 18,
+    backgroundColor: "rgba(251,176,64,0.12)",
+  },
   songHeader: {
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.md,
   },
   artContainer: {
-    width: 46,
-    height: 46,
+    width: 42,
+    height: 42,
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1,
+    backgroundColor: "rgba(255,255,255,0.08)",
   },
   songInfo: { flex: 1, minWidth: 0 },
-  songTitle: { fontSize: 15, fontWeight: "700" },
-  songMeta: { fontSize: 12, marginTop: 3 },
+  songTitle: { fontSize: 16, fontWeight: "700", color: "#ffffff" },
+  songMeta: { fontSize: 12, marginTop: 3, color: "rgba(135,206,235,0.80)" },
+  songDivider: {
+    height: 0.5,
+    marginTop: Spacing.md,
+    backgroundColor: "rgba(255,255,255,0.08)",
+  },
   songFooter: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginTop: Spacing.md,
-    paddingTop: Spacing.sm,
-    borderTopWidth: 0.5,
+    marginTop: Spacing.sm,
   },
-  songNumber: { fontSize: 18, fontWeight: "700", letterSpacing: 0.5 },
-  keyChip: { borderRadius: 6, paddingHorizontal: 10, paddingVertical: 4 },
-  keyChipText: { fontSize: 11, fontWeight: "700" },
+  songNumber: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "rgba(135,206,235,0.40)",
+  },
+  keyChip: {
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    overflow: "hidden",
+  },
+  keyChipText: { fontSize: 12, fontWeight: "800", color: "#010f18" },
   skeletonSearch: {
-    height: 44,
-    borderRadius: 14,
+    height: 52,
+    borderRadius: 16,
     borderWidth: 1,
     marginBottom: 10,
   },
@@ -910,13 +979,13 @@ const ss = StyleSheet.create({
     gap: 8,
     paddingVertical: 10,
   },
-  skeletonPill: { height: 38, borderRadius: 999, borderWidth: 1 },
+  skeletonPill: { height: 40, borderRadius: 999, borderWidth: 1 },
   skeletonList: {
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.sm,
     gap: Spacing.md,
   },
-  skeletonCard: { height: 92, borderRadius: 16, borderWidth: 1 },
+  skeletonCard: { height: CARD_HEIGHT, borderRadius: 20, borderWidth: 1 },
 });
 
 const es = StyleSheet.create({

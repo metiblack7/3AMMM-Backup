@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useRef } from "react";
 import {
   View,
+  Text,
   StyleSheet,
   Platform,
   StatusBar,
@@ -8,6 +9,7 @@ import {
   Animated,
   Easing,
 } from "react-native";
+import { BlurTargetView, BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import { FontAwesome5 } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -17,7 +19,6 @@ import SongsTab from "../screens/worshiper/SongsTab";
 import { SetlistsTab, FavoritesTab } from "../screens/worshiper/OtherTabs";
 import { SettingsTab } from "../screens/worshiper/SettingsTab";
 import LyricsScreen, { Song } from "../screens/LyricsScreen";
-import PlatformBlur from "../components/PlatformBlur";
 import LoginScreen from "../screens/LoginScreen";
 import AdminDashboard from "../screens/admin/AdminDashboard";
 import { useApp } from "../lib/AppContext";
@@ -34,13 +35,15 @@ const TABS: { key: WTab; icon: TabIconName }[] = [
   { key: "settings", icon: "cog" },
 ];
 
-const TAB_ICON_AREA = 62;
-const TAB_BAR_MARGIN = 18;
+const TAB_BAR_TABS = TABS;
+const TAB_BAR_HEIGHT = 72;
+const TAB_BAR_MARGIN = 12;
 
 export default function WorshiperApp() {
   const { C, isDark } = useTheme();
-  const { isAdmin } = useApp();
+  const { isAdmin, t } = useApp();
   const insets = useSafeAreaInsets();
+  const tabBarBlurTarget = useRef<View | null>(null);
   const [adminRoute, setAdminRoute] = useState<
     "closed" | "login" | "dashboard"
   >("closed");
@@ -54,12 +57,63 @@ export default function WorshiperApp() {
   const songsScrollOffset = useRef(0);
 
   const [activeTab, setActiveTab] = useState<WTab>("home");
+  const [tabLayouts, setTabLayouts] = useState<
+    Partial<Record<WTab, { x: number; width: number }>>
+  >({});
+  const activeIndicatorX = useRef(new Animated.Value(0)).current;
+  const hasPositionedIndicator = useRef(false);
+  const tabIconScale = useRef(
+    TABS.map(() => new Animated.Value(1)),
+  ).current;
   const tabOpacity = useRef(
     TABS.map((_, i) => new Animated.Value(i === 0 ? 1 : 0)),
   ).current;
   const tabTranslate = useRef(
     TABS.map((_, i) => new Animated.Value(i === 0 ? 0 : 14)),
   ).current;
+
+  React.useEffect(() => {
+    const activeLayout = tabLayouts[activeTab];
+    if (!activeLayout) return;
+
+    const targetX = activeLayout.x + (activeLayout.width - 44) / 2;
+    if (!hasPositionedIndicator.current) {
+      activeIndicatorX.setValue(targetX);
+      hasPositionedIndicator.current = true;
+      return;
+    }
+
+    activeIndicatorX.stopAnimation();
+    Animated.spring(activeIndicatorX, {
+      toValue: targetX,
+      tension: 90,
+      friction: 14,
+      useNativeDriver: true,
+    }).start();
+  }, [activeIndicatorX, activeTab, tabLayouts]);
+
+  React.useEffect(() => {
+    const activeIndex = TAB_BAR_TABS.findIndex(
+      (tab) => tab.key === activeTab,
+    );
+    if (activeIndex === -1) return;
+
+    const activeScale = tabIconScale[activeIndex];
+    activeScale.setValue(0.7);
+    Animated.sequence([
+      Animated.timing(activeScale, {
+        toValue: 1.2,
+        duration: 110,
+        useNativeDriver: true,
+      }),
+      Animated.spring(activeScale, {
+        toValue: 1,
+        tension: 150,
+        friction: 5,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [activeTab, tabIconScale]);
 
   const openSong = useCallback(
     (song: Song) => {
@@ -137,18 +191,6 @@ export default function WorshiperApp() {
     );
   }
 
-  const pillGradient: [string, string] = isDark
-    ? [C.glass, C.navyGlow]
-    : [C.surface, C.bgDeep];
-
-  const pillBorder = isDark ? C.glassBorder : C.border;
-
-  const pillTopEdgeBg = isDark
-    ? "rgba(255,255,255,0.20)"
-    : "rgba(255,255,255,0.90)";
-
-  const tabBarHeight = TAB_ICON_AREA + insets.bottom;
-  const contentBottomPad = tabBarHeight + TAB_BAR_MARGIN + 8;
   const tabBarBottom = TAB_BAR_MARGIN + insets.bottom;
 
   return (
@@ -159,7 +201,7 @@ export default function WorshiperApp() {
         translucent
       />
 
-      <View style={[styles.content, { paddingBottom: contentBottomPad }]}>
+      <BlurTargetView ref={tabBarBlurTarget} style={styles.content}>
         <View style={{ flex: 1 }}>
           {TABS.map((tab, index) => {
             const isActive = activeTab === tab.key;
@@ -193,89 +235,133 @@ export default function WorshiperApp() {
                     onSongsLoaded={setAllSongs}
                   />
                 )}
-                {tab.key === "setlists" && (
-                  <SetlistsTab onOpenSong={openSong} />
+                {tab.key === "setlists" && <SetlistsTab onOpenSong={openSong} />}
+                {tab.key === "favs" && (
+                  <FavoritesTab
+                    onOpenSong={openSong}
+                    allSongs={allSongs}
+                    onBackToSongs={() =>
+                      handleTabPress(
+                        "songs",
+                        TABS.findIndex((item) => item.key === "songs"),
+                      )
+                    }
+                  />
                 )}
-                {tab.key === "favs" && <FavoritesTab onOpenSong={openSong} />}
                 {tab.key === "settings" && (
-                  <SettingsTab onAdminLogin={() => setAdminRoute("login")} />
+                  <SettingsTab
+                    onBackToSongs={() =>
+                      handleTabPress(
+                        "songs",
+                        TABS.findIndex((item) => item.key === "songs"),
+                      )
+                    }
+                    onAdminLogin={() => setAdminRoute("login")}
+                  />
                 )}
               </Animated.View>
             );
           })}
         </View>
-      </View>
+      </BlurTargetView>
 
       {/* ── TAB BAR ───────────────────────────────────────────── */}
       <View
         style={[styles.tabBarOuter, { bottom: tabBarBottom }]}
         pointerEvents="box-none">
-        <View style={[styles.tabBarPill, { borderColor: pillBorder }]}>
-          <View style={StyleSheet.absoluteFill}>
-            <LinearGradient
-              colors={pillGradient}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 0, y: 1 }}
+        <View style={styles.tabBarPillShadow}>
+          <View style={styles.tabBarPill}>
+            <BlurView
+              blurTarget={tabBarBlurTarget}
+              blurMethod="dimezisBlurView"
+              intensity={42}
+              tint={isDark ? "dark" : "light"}
+              pointerEvents="none"
               style={StyleSheet.absoluteFill}
             />
             <View
+              pointerEvents="none"
               style={[
                 StyleSheet.absoluteFill,
                 {
                   backgroundColor: isDark
-                    ? "rgba(3,10,18,0.40)"
-                    : "rgba(240,248,255,0.28)",
+                    ? "rgba(2,22,36,0.10)"
+                    : "rgba(244,250,253,0.16)",
                 },
               ]}
             />
-          </View>
 
-          <PlatformBlur
-            intensity={isDark ? 38 : 55}
-            isDark={isDark}
-            style={StyleSheet.absoluteFill}
-            borderRadius={32}
-          />
+            <View style={styles.tabBarRow}>
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  styles.activeIndicator,
+                  { transform: [{ translateX: activeIndicatorX }] },
+                ]}>
+                <LinearGradient
+                  colors={
+                    isDark
+                      ? [
+                          "rgba(135,206,235,0.22)",
+                          "rgba(91,184,224,0.12)",
+                        ]
+                      : [
+                          "rgba(42,138,184,0.18)",
+                          "rgba(91,184,224,0.10)",
+                        ]
+                  }
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={StyleSheet.absoluteFill}
+                />
+              </Animated.View>
 
-          <View
-            style={[styles.pillTopEdge, { backgroundColor: pillTopEdgeBg }]}
-          />
-
-          <View style={styles.tabBarRow}>
-            {TABS.map((tab, index) => {
-              const isActive = activeTab === tab.key;
-              return (
-                <TouchableOpacity
-                  key={tab.key}
-                  style={styles.tabItem}
-                  onPress={() => handleTabPress(tab.key, index)}
-                  activeOpacity={0.7}>
-                  {isActive ? (
-                    <View style={styles.activeWrap}>
-                      <LinearGradient
-                        colors={[C.sky, C.skyDeep ?? "#5bb8e0"]}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                        style={[StyleSheet.absoluteFill, { borderRadius: 23 }]}
+              {TAB_BAR_TABS.map((tab, index) => {
+                const isActive = activeTab === tab.key;
+                const label =
+                  tab.key === "home"
+                    ? t.home
+                    : tab.key === "songs"
+                      ? t.songs
+                      : tab.key === "setlists"
+                        ? t.setlists
+                        : tab.key === "favs"
+                          ? t.favs
+                          : t.settings;
+                return (
+                  <TouchableOpacity
+                    key={tab.key}
+                    style={styles.tabItem}
+                    onLayout={(event) => {
+                      const { x, width } = event.nativeEvent.layout;
+                      setTabLayouts((layouts) => {
+                        const current = layouts[tab.key];
+                        if (current?.x === x && current.width === width) {
+                          return layouts;
+                        }
+                        return { ...layouts, [tab.key]: { x, width } };
+                      });
+                    }}
+                    onPress={() => handleTabPress(tab.key, index)}
+                    accessibilityRole="tab"
+                    accessibilityLabel={label}
+                    accessibilityState={{ selected: isActive }}
+                    activeOpacity={0.7}>
+                    <Animated.View
+                      style={[
+                        styles.tabIconWrap,
+                        { transform: [{ scale: tabIconScale[index] }] },
+                      ]}>
+                      <FontAwesome5
+                        name={tab.icon}
+                        size={18}
+                        color={isActive ? C.sky : C.text2}
                       />
-                      <LinearGradient
-                        colors={[
-                          "rgba(255,255,255,0.35)",
-                          "rgba(255,255,255,0.00)",
-                        ]}
-                        start={{ x: 0.5, y: 0 }}
-                        end={{ x: 0.5, y: 0.6 }}
-                        style={[StyleSheet.absoluteFill, { borderRadius: 23 }]}
-                      />
-                      <View style={styles.activeWrapSheen} />
-                      <FontAwesome5 name={tab.icon} size={19} color="#010f18" />
-                    </View>
-                  ) : (
-                    <FontAwesome5 name={tab.icon} size={19} color="#7f919e" />
-                  )}
-                </TouchableOpacity>
-              );
-            })}
+                    </Animated.View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
           </View>
         </View>
       </View>
@@ -312,37 +398,43 @@ const styles = StyleSheet.create({
   },
   tabBarOuter: {
     position: "absolute",
-    left: 16,
-    right: 16,
+    left: 18,
+    right: 18,
     zIndex: 100,
+    elevation: 100,
   },
-  tabBarPill: {
-    borderRadius: 32,
-    overflow: "hidden",
-    borderWidth: 0.5,
+  tabBarPillShadow: {
+    height: TAB_BAR_HEIGHT,
+    borderRadius: 34,
     ...Platform.select({
       ios: {
         shadowColor: "#000",
-        shadowOpacity: 0.25,
-        shadowRadius: 32,
-        shadowOffset: { width: 0, height: 12 },
+        shadowOpacity: 0.22,
+        shadowRadius: 18,
+        shadowOffset: { width: 0, height: 8 },
       },
-      android: { elevation: 20 },
+      android: { elevation: 10 },
     }),
   },
-  pillTopEdge: {
+  tabBarPill: {
+    height: TAB_BAR_HEIGHT,
+    borderRadius: 34,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(135,206,235,0.28)",
+  },
+  activeIndicator: {
     position: "absolute",
-    top: 0,
-    left: 16,
-    right: 16,
-    height: 0.8,
-    zIndex: 2,
+    top: 14,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    overflow: "hidden",
   },
   tabBarRow: {
+    position: "relative",
     flexDirection: "row",
-    paddingHorizontal: 4,
-    paddingTop: 10,
-    paddingBottom: 12,
+    height: TAB_BAR_HEIGHT,
     alignItems: "center",
   },
   tabItem: {
@@ -350,33 +442,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  activeWrap: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
+  tabIconWrap: {
+    width: 44,
+    height: 44,
     alignItems: "center",
     justifyContent: "center",
-    overflow: "hidden",
-    borderWidth: 0.8,
-    borderColor: "rgba(255,255,255,0.30)",
-    ...Platform.select({
-      ios: {
-        shadowColor: "#87ceeb",
-        shadowOpacity: 0.55,
-        shadowRadius: 12,
-        shadowOffset: { width: 0, height: 3 },
-      },
-      android: { elevation: 8 },
-    }),
-  },
-  activeWrapSheen: {
-    position: "absolute",
-    top: 0,
-    left: 6,
-    right: 6,
-    height: 1,
-    backgroundColor: "rgba(255,255,255,0.40)",
-    borderTopLeftRadius: 23,
-    borderTopRightRadius: 23,
   },
 });

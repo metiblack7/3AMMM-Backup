@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "8539eea1-4c55-4170-b190-6ec709ebae3e"
+      }
+    },
+    "android": {
+      "package": "com.ammm.worship"
+    }
+  }
+}

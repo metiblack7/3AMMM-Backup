@@ -21,12 +21,16 @@ import {
   LayoutChangeEvent,
   TextInput,
   Keyboard,
+  Alert,
 } from "react-native";
+import { BlurTargetView, BlurView } from "expo-blur";
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "../lib/api";
 import { db } from "../lib/db";
+import { favoritesService } from "../lib/favoritesService";
+import { subscribe } from "../lib/pubsub";
 import { useApp } from "../lib/AppContext";
 import { useTheme } from "../lib/useTheme";
 import { Spacing } from "../theme";
@@ -197,12 +201,18 @@ export default function LyricsScreen({
     setBoldLyrics,
     t,
   } = useApp();
-  const { profile, signOut } = useApp();
+  const { profile } = useApp();
   const { C, isDark } = useTheme();
   const insets = useSafeAreaInsets();
 
-  const [isFav, setIsFav] = useState(false);
+  const [favoriteState, setFavoriteState] = useState<{
+    songId: string;
+    isFavorite: boolean;
+  } | null>(null);
   const [toggling, setToggling] = useState(false);
+  const [favoriteReadySongId, setFavoriteReadySongId] = useState<string | null>(
+    null,
+  );
   const [showSlideshow, setShowSlideshow] = useState(false);
   const [adjustOpen, setAdjustOpen] = useState(false);
 
@@ -214,6 +224,20 @@ export default function LyricsScreen({
   const fabOpacity = useRef(new Animated.Value(1)).current;
   const pageShake = useRef(new Animated.Value(0)).current;
   const keyboardLift = useRef(new Animated.Value(0)).current;
+  const lyricsBlurTarget = useRef<View | null>(null);
+  const favoriteProgress = useRef(new Animated.Value(0)).current;
+  const favoriteSongIdRef = useRef(song?._id);
+  const favoriteToggleInFlight = useRef(false);
+  const favoriteMutationVersionRef = useRef(0);
+  favoriteSongIdRef.current = song?._id;
+  const isFav =
+    !!song?._id &&
+    favoriteState?.songId === song._id &&
+    favoriteState.isFavorite;
+  const favoriteStatusReady = favoriteReadySongId === song?._id;
+  const setIsFav = (isFavorite: boolean) => {
+    if (song?._id) setFavoriteState({ songId: song._id, isFavorite });
+  };
 
   const scrollRef = useRef<ScrollView>(null);
   const pageInputRef = useRef<TextInput>(null);
@@ -283,35 +307,57 @@ export default function LyricsScreen({
 
   useEffect(() => {
     if (!song?._id) return;
+    let active = true;
+    const requestVersion = favoriteMutationVersionRef.current;
+    setIsFav(false);
+    setFavoriteReadySongId(null);
 
     (async () => {
       try {
+        const hasLocal = await db.favorites.has(song._id);
+        if (active) {
+          setIsFav(hasLocal);
+          setFavoriteReadySongId(song._id);
+        }
+
         const isGuest =
           !!profile && String(profile._id || "").startsWith("guest_");
-        if (isGuest) {
-          const has = await db.favorites.has(song._id);
-          setIsFav(has);
-          return;
-        }
+        if (!isAuthenticated || isGuest) return;
 
-        if (isAuthenticated) {
-          const resp = await api.favorites.getIds().catch(() => []);
-          let idsArr: string[] = [];
-          if (Array.isArray(resp)) idsArr = resp as string[];
-          else if (resp && Array.isArray((resp as any).ids))
-            idsArr = (resp as any).ids;
-          setIsFav(idsArr.includes(song._id));
-          return;
-        }
-
-        // fallback to local store when not authenticated
-        const hasLocal = await db.favorites.has(song._id);
-        setIsFav(hasLocal);
-      } catch (err) {
-        /* ignore */
+        const response = await api.favorites.getIds();
+        const ids: string[] = Array.isArray(response)
+          ? response
+          : (response?.ids ?? []);
+        if (favoriteMutationVersionRef.current !== requestVersion) return;
+        if (active) setIsFav(ids.includes(song._id));
+      } catch (error) {
+        console.warn("Could not refresh favorite status:", error);
       }
     })();
+
+    const unsubscribe = subscribe("favorites:changed", () => {
+      favoriteMutationVersionRef.current += 1;
+      void db.favorites.has(song._id).then((hasFavorite) => {
+        if (active && favoriteSongIdRef.current === song._id) {
+          setIsFav(hasFavorite);
+          setFavoriteReadySongId(song._id);
+        }
+      });
+    });
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
   }, [song?._id, isAuthenticated, profile]);
+
+  useEffect(() => {
+    Animated.timing(favoriteProgress, {
+      toValue: isFav ? 1 : 0,
+      duration: 220,
+      useNativeDriver: true,
+    }).start();
+  }, [favoriteProgress, isFav]);
 
   const closeAdjustPanel = useCallback(() => {
     Animated.timing(adjustAnim, {
@@ -407,34 +453,43 @@ export default function LyricsScreen({
   }, [fabOpacity]);
 
   const toggleFav = useCallback(async () => {
-    if (toggling || !song?._id) return;
-
-    const isGuest = !!profile && String(profile._id || "").startsWith("guest_");
-
-    // Not signed-in and no guest profile -> prompt sign-in
-    if (!isAuthenticated && !isGuest) {
-      const { Alert } = require("react-native");
-      Alert.alert(
-        t.signInRequired ?? "Sign in required",
-        t.signInToFavorite ?? "Please sign in to save favorites.",
-        [
-          { text: t.cancel ?? "Cancel", style: "cancel" },
-          { text: t.signIn ?? "Sign in", onPress: () => signOut() },
-        ],
-      );
+    if (
+      favoriteToggleInFlight.current ||
+      toggling ||
+      !favoriteStatusReady ||
+      !song?._id
+    ) {
       return;
     }
 
+    const songId = song._id;
+    favoriteToggleInFlight.current = true;
+    favoriteMutationVersionRef.current += 1;
+    const previousIsFav = isFav;
+    setIsFav(!previousIsFav);
     setToggling(true);
     try {
-      const { favorited } = await (
-        await import("../lib/favoritesService")
-      ).favoritesService.toggle(song._id, profile);
-      setIsFav(favorited);
+      if (!previousIsFav) {
+        await db.songs.upsert(song);
+      }
+      const { favorited } = await favoritesService.toggle(songId, profile);
+      if (favoriteSongIdRef.current === songId) setIsFav(favorited);
+    } catch (error) {
+      console.error("Could not update favorite:", error);
+      if (favoriteSongIdRef.current === songId) setIsFav(previousIsFav);
+      Alert.alert(t.error, t.favoriteUpdateError);
     } finally {
-      setToggling(false);
+      favoriteToggleInFlight.current = false;
+      if (favoriteSongIdRef.current === songId) setToggling(false);
     }
-  }, [isAuthenticated, toggling, song?._id, profile, signOut, t]);
+  }, [
+    isFav,
+    toggling,
+    favoriteStatusReady,
+    song,
+    profile,
+    t,
+  ]);
 
   const handleShare = useCallback(async () => {
     if (!song) return;
@@ -555,12 +610,33 @@ export default function LyricsScreen({
   }
 
   const TOP = insets.top;
-  const headerBg = isDark ? "rgba(5,14,24,0.90)" : "rgba(255,255,255,0.96)";
-  const scrollBg = isDark ? C.bgDeep : C.bg;
-  const iconColor = isDark ? "rgba(240,248,255,0.94)" : "#12344d";
+  const scrollBg = C.bg;
+  const iconColor = C.text;
   const LABEL_COLOR = C.sky;
-  const btnBase = isDark ? "rgba(255,255,255,0.07)" : "rgba(255,255,255,0.80)";
-  const btnBorder = isDark ? "rgba(255,255,255,0.13)" : "rgba(4,57,84,0.10)";
+  const btnBase = isDark ? "rgba(255,255,255,0.06)" : "rgba(4,57,84,0.04)";
+  const btnBorder = C.border;
+  const headerSheenColors: [string, string, string] = isDark
+    ? [
+        "rgba(135,206,235,0.10)",
+        "rgba(135,206,235,0.00)",
+        "rgba(135,206,235,0.04)",
+      ]
+    : [
+        "rgba(42,138,184,0.08)",
+        "rgba(255,255,255,0.00)",
+        "rgba(42,138,184,0.04)",
+      ];
+  const headerEdgeColors: [string, string, string] = isDark
+    ? [
+        "rgba(135,206,235,0.00)",
+        "rgba(135,206,235,0.18)",
+        "rgba(135,206,235,0.00)",
+      ]
+    : [
+        "rgba(42,138,184,0.00)",
+        "rgba(42,138,184,0.10)",
+        "rgba(42,138,184,0.00)",
+      ];
 
   return (
     <View style={[s.wrap, { backgroundColor: scrollBg }]}>
@@ -570,134 +646,68 @@ export default function LyricsScreen({
         translucent
       />
 
-      <View style={[s.header, { paddingTop: TOP + 8 }]}>
-        <View
-          style={[StyleSheet.absoluteFill, { backgroundColor: headerBg }]}
-        />
-        <LinearGradient
-          colors={
-            isDark
-              ? ([C.surface, C.bg, C.bgDeep] as any)
-              : ([C.surface, C.bg, C.bgDeep] as any)
-          }
-          locations={[0, 0.5, 1]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
+      <View
+        style={[
+          s.header,
+          {
+            marginTop: TOP + 8,
+            borderColor: C.border,
+          },
+        ]}>
+        <BlurView
+          blurTarget={lyricsBlurTarget}
+          blurMethod="dimezisBlurView"
+          intensity={60}
+          tint={isDark ? "systemUltraThinMaterialDark" : "default"}
+          pointerEvents="none"
           style={StyleSheet.absoluteFill}
         />
         <LinearGradient
-          colors={
-            isDark
-              ? ([
-                  "rgba(135,206,235,0.10)",
-                  "rgba(135,206,235,0.00)",
-                  "rgba(135,206,235,0.04)",
-                ] as any)
-              : ([
-                  "rgba(255,255,255,0.75)",
-                  "rgba(255,255,255,0.00)",
-                  "rgba(42,138,184,0.04)",
-                ] as any)
-          }
+          colors={headerSheenColors}
           locations={[0, 0.5, 1]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
           style={StyleSheet.absoluteFill}
+          pointerEvents="none"
         />
-        <View
-          style={[
-            s.topSheen,
-            {
-              backgroundColor: isDark
-                ? "rgba(255,255,255,0.16)"
-                : "rgba(255,255,255,1)",
-            },
-          ]}
-        />
+        <View style={s.headerTopSheen} pointerEvents="none" />
         <LinearGradient
-          colors={
-            isDark
-              ? ([
-                  "rgba(135,206,235,0.00)",
-                  "rgba(135,206,235,0.18)",
-                  "rgba(135,206,235,0.00)",
-                ] as any)
-              : ([
-                  "rgba(4,57,84,0.00)",
-                  "rgba(4,57,84,0.08)",
-                  "rgba(4,57,84,0.00)",
-                ] as any)
-          }
+          colors={headerEdgeColors}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
-          style={s.bottomEdge}
+          style={s.headerBottomEdge}
+          pointerEvents="none"
         />
-
         <View style={s.row1}>
           <TouchableOpacity
-            style={s.glassBtn}
+            accessibilityRole="button"
+            accessibilityLabel={t.back}
+            style={[
+              s.actionBtn,
+              s.backAction,
+              { backgroundColor: btnBase, borderColor: btnBorder },
+            ]}
             onPress={onBack}
-            activeOpacity={0.7}>
-            <View
-              style={[
-                StyleSheet.absoluteFill,
-                s.glassBtnBg,
-                { backgroundColor: btnBase, borderColor: btnBorder },
-              ]}
-            />
-            <LinearGradient
-              colors={["rgba(255,255,255,0.14)", "rgba(255,255,255,0.03)"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 0, y: 1 }}
-              style={StyleSheet.absoluteFill}
-            />
-            <View
-              style={[
-                s.glassBtnSheen,
-                {
-                  backgroundColor: isDark
-                    ? "rgba(255,255,255,0.20)"
-                    : "rgba(255,255,255,0.95)",
-                },
-              ]}
-            />
+            activeOpacity={0.75}>
             <Feather name="chevron-left" size={19} color={iconColor} />
           </TouchableOpacity>
 
           <View style={s.titleBlock}>
-            <View style={s.titleTextWrap}>
-              <Text
-                style={[
-                  s.title,
-                  {
-                    color: isDark ? C.sky : C.navy,
-                    textShadowColor: isDark
-                      ? "rgba(135,206,235,0.25)"
-                      : "rgba(42,138,184,0.15)",
-                    textShadowOffset: { width: 0, height: 1 },
-                    textShadowRadius: 6,
-                  },
-                ]}
-                numberOfLines={1}>
-                {song.title}
-              </Text>
-              <Text style={[s.singer, { color: C.text2 }]} numberOfLines={1}>
-                {song.singerName}
-              </Text>
-            </View>
+            <Text style={[s.title, { color: C.text }]} numberOfLines={1}>
+              {song.title}
+            </Text>
+            <Text style={[s.singer, { color: C.text2 }]} numberOfLines={1}>
+              {song.singerName}
+            </Text>
           </View>
 
           <View style={s.keyWrap}>
             <LinearGradient
-              colors={["#87ceeb", "#5bb8e0"]}
+              colors={[C.sky, C.skyDeep]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={s.keyBadge}>
-              <View style={s.keySheen} />
-              <Text
-                style={[s.keyText, { color: isDark ? "#04131d" : "#ffffff" }]}>
-                {song.key}
-              </Text>
+              <Text style={[s.keyText, { color: C.bg }]}>{song.key}</Text>
             </LinearGradient>
           </View>
         </View>
@@ -705,52 +715,91 @@ export default function LyricsScreen({
         <View style={s.row2}>
           <View style={s.actionGroup}>
             <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel={t.fontSize ?? "Adjust text"}
               style={[
                 s.actionBtn,
+                { backgroundColor: btnBase, borderColor: btnBorder },
                 adjustOpen && {
-                  backgroundColor: "rgba(135,206,235,0.14)",
-                  borderColor: "rgba(135,206,235,0.35)",
+                  backgroundColor: C.skyMid,
+                  borderColor: C.skyBorder,
                 },
               ]}
               onPress={adjustOpen ? closeAdjustPanel : openAdjustPanel}
               activeOpacity={0.75}>
               <Feather
                 name="type"
-                size={17}
+                size={14}
                 color={adjustOpen ? C.sky : iconColor}
               />
             </TouchableOpacity>
 
             <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel={isFav ? t.removeFav : t.addFav}
+              accessibilityState={{ checked: isFav }}
               style={[
                 s.actionBtn,
-                isFav && {
-                  backgroundColor: "rgba(251,176,64,0.14)",
-                  borderColor: "rgba(251,176,64,0.30)",
-                },
+                { backgroundColor: btnBase, borderColor: btnBorder },
               ]}
               onPress={toggleFav}
-              disabled={toggling}
+              disabled={toggling || !favoriteStatusReady}
               activeOpacity={0.75}>
-              <Feather
-                name="heart"
-                size={17}
-                color={isFav ? "#fbb040" : iconColor}
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  StyleSheet.absoluteFill,
+                  s.favoriteActiveBackground,
+                  {
+                    backgroundColor: C.goldDeep,
+                    opacity: favoriteProgress.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0, 0.3],
+                    }),
+                  },
+                ]}
               />
+              <View style={s.favoriteIcon}>
+                <Feather name="heart" size={14} color={iconColor} />
+                <Animated.View
+                  pointerEvents="none"
+                  style={[
+                    StyleSheet.absoluteFill,
+                    s.favoriteFilledIcon,
+                    { opacity: favoriteProgress },
+                  ]}>
+                  <Feather
+                    name="heart"
+                    size={14}
+                    color={C.gold}
+                    fill={C.gold}
+                  />
+                </Animated.View>
+              </View>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={s.actionBtn}
+              accessibilityRole="button"
+              accessibilityLabel={t.share ?? "Share"}
+              style={[
+                s.actionBtn,
+                { backgroundColor: btnBase, borderColor: btnBorder },
+              ]}
               onPress={handleShare}
               activeOpacity={0.75}>
-              <Feather name="share-2" size={17} color={iconColor} />
+              <Feather name="share-2" size={14} color={iconColor} />
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={s.actionBtn}
+              accessibilityRole="button"
+              accessibilityLabel={t.fullscreen ?? "Fullscreen"}
+              style={[
+                s.actionBtn,
+                { backgroundColor: btnBase, borderColor: btnBorder },
+              ]}
               onPress={() => setShowSlideshow(true)}
               activeOpacity={0.75}>
-              <Feather name="maximize-2" size={17} color={iconColor} />
+              <Feather name="maximize-2" size={14} color={iconColor} />
             </TouchableOpacity>
           </View>
 
@@ -771,9 +820,7 @@ export default function LyricsScreen({
             style={[
               s.adjustPanel,
               {
-                backgroundColor: isDark
-                  ? "rgba(2,15,24,0.97)"
-                  : "rgba(255,255,255,0.99)",
+                backgroundColor: C.surfaceHigh,
                 borderColor: C.border,
                 opacity: adjustAnim,
                 transform: [
@@ -847,17 +894,24 @@ export default function LyricsScreen({
       </View>
 
       <View style={s.body} {...swipePan.panHandlers}>
-        <ScrollView
-          ref={scrollRef}
-          style={s.scroll}
-          contentContainerStyle={s.lyricsContent}
-          showsVerticalScrollIndicator={false}
-          scrollEventThrottle={16}
-          onScrollBeginDrag={dimFabs}
-          onScrollEndDrag={showFabs}
-          onMomentumScrollBegin={dimFabs}
-          onMomentumScrollEnd={showFabs}>
-          <View style={{ height: 28 }} />
+        <BlurTargetView ref={lyricsBlurTarget} style={s.scroll}>
+          <ScrollView
+            ref={scrollRef}
+            style={s.scroll}
+            contentContainerStyle={[
+              s.lyricsContent,
+              {
+                paddingTop: TOP + (adjustOpen ? 324 : 118),
+                paddingBottom: insets.bottom + 14,
+              },
+            ]}
+            showsVerticalScrollIndicator={false}
+            scrollEventThrottle={16}
+            onScrollBeginDrag={dimFabs}
+            onScrollEndDrag={showFabs}
+            onMomentumScrollBegin={dimFabs}
+            onMomentumScrollEnd={showFabs}>
+          <View style={{ height: 12 }} />
 
           {song.lyrics.map((section, i) => (
             <View key={i} style={s.section}>
@@ -887,7 +941,8 @@ export default function LyricsScreen({
             </View>
           ))}
           <View style={{ height: 180 }} />
-        </ScrollView>
+          </ScrollView>
+        </BlurTargetView>
 
         <Animated.View
           style={[
@@ -974,139 +1029,122 @@ const s = StyleSheet.create({
   wrap: { flex: 1 },
 
   header: {
-    position: "relative",
-    overflow: "visible",
-    paddingHorizontal: Spacing.lg,
-    paddingBottom: 14,
+    position: "absolute",
+    top: 0,
+    left: 10,
+    right: 10,
+    zIndex: 10,
+    elevation: 10,
+    overflow: "hidden",
+    paddingHorizontal: Spacing.md,
+    paddingTop: 9,
+    paddingBottom: 7,
+    borderRadius: 22,
+    borderWidth: StyleSheet.hairlineWidth,
   },
-  topSheen: {
+  headerTopSheen: {
     position: "absolute",
     top: 0,
     left: 0,
     right: 0,
-    height: 1,
+    height: 1.5,
+    backgroundColor: "rgba(255,255,255,0.16)",
   },
-  bottomEdge: {
+  headerBottomEdge: {
     position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
     height: 0.5,
   },
-
   row1: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    paddingTop: 2,
-  },
-  glassBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    overflow: "hidden",
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
-  },
-  glassBtnBg: {
-    ...StyleSheet.absoluteFillObject,
-    borderRadius: 12,
-    borderWidth: 0.5,
-  },
-  glassBtnSheen: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 1,
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
+    gap: 8,
+    minHeight: 38,
   },
   titleBlock: {
     flex: 1,
     minWidth: 0,
-    gap: 3,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  titleTextWrap: {
-    flex: 1,
-    minWidth: 0,
-    gap: 3,
+    gap: 1,
   },
   title: {
-    fontSize: 16,
-    fontWeight: "800",
-    letterSpacing: 0.2,
+    fontSize: 17,
+    lineHeight: 22,
+    fontWeight: "700",
   },
   singer: {
-    fontSize: 12,
-    fontWeight: "400",
-    opacity: 0.85,
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: "500",
   },
   keyWrap: {
-    borderRadius: 8,
+    borderRadius: 10,
     overflow: "hidden",
-    flexShrink: 0,
-    ...Platform.select({
-      ios: {
-        shadowColor: "#87ceeb",
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        shadowOffset: { width: 0, height: 2 },
-      },
-      android: { elevation: 3 },
-    }),
   },
   keyBadge: {
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    minWidth: 30,
+    height: 30,
+    borderRadius: 9,
     alignItems: "center",
     justifyContent: "center",
-  },
-  keySheen: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 1,
-    backgroundColor: "rgba(255,255,255,0.35)",
-    borderTopLeftRadius: 8,
-    borderTopRightRadius: 8,
+    paddingHorizontal: 6,
   },
   keyText: {
-    fontSize: 12,
-    fontWeight: "800",
-    letterSpacing: 0.5,
+    fontSize: 13,
+    fontWeight: "700",
   },
-
   row2: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginTop: 10,
+    gap: 6,
+    marginTop: 6,
   },
   actionGroup: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: 4,
+    flexShrink: 1,
+  },
+  backAction: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    flexShrink: 0,
   },
   actionBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+    width: 29,
+    height: 29,
+    borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 0.5,
-    borderColor: "transparent",
+    borderColor: "rgba(135,206,235,0.15)",
+    backgroundColor: "transparent",
+    overflow: "hidden",
+  },
+  favoriteActiveBackground: {
+    borderRadius: 8,
+  },
+  favoriteIcon: {
+    width: 14,
+    height: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  favoriteFilledIcon: {
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   pageBadge: {
+    minWidth: 30,
+    height: 30,
     borderRadius: 9,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 7,
     overflow: "hidden",
     position: "relative",
     ...Platform.select({
@@ -1130,7 +1168,7 @@ const s = StyleSheet.create({
     borderTopRightRadius: 9,
   },
   pageNum: {
-    fontSize: 14,
+    fontSize: 11,
     fontWeight: "800",
     color: "#010f18",
     letterSpacing: 0.3,

@@ -53,6 +53,10 @@ const translations = {
     nextSat: "Next Saturday",
     allSongs: "All songs",
     myFavs: "Favorites",
+    homeHeroDay: "3AMMM",
+    homeHeroWorship: "Sabba App",
+    homeHeroService: "Welcome!",
+    seeAll: "See all",
 
     // Songs
     search: "Search songs...",
@@ -85,8 +89,34 @@ const translations = {
     back: "Back",
     keyOf: "Key",
     savedFav: "Saved to favorites",
+    addFav: "Add to favorites",
     removeFav: "Remove from favorites",
     noFavs: "No favorites yet.\nTap any song to save it here.",
+    signInRequired: "Sign in required",
+    signInToFavorite: "Please sign in to save favorites.",
+    favoriteUpdateError: "Could not update favorite. Please try again.",
+    noSongsFound: "No songs found.",
+    noSetlists: "No setlists yet.",
+    untitledSetlist: "Untitled setlist",
+    noNotifications: "No notifications yet.",
+    couldNotLoadSongs: "Could not load songs",
+    youAreOffline: "You are offline",
+    tapToRetry: "Tap to retry",
+    skip: "Skip",
+    next: "Next →",
+    startWorshipping: "Start Worshipping →",
+    onboarding1Title: "Every Worship Song\nIn One Place",
+    onboarding1Subtitle:
+      "Browse hundreds of worship songs with\nfull lyrics, musical key, and singer info\n— ready for Saturday service.",
+    onboarding2Title: "Built for\nWorship Teams",
+    onboarding2Subtitle:
+      "Follow along with your team's setlist,\nsave your favorite songs, and prepare\nyour heart before the service begins.",
+    onboarding3Title: "Sing With\nConfidence",
+    onboarding3Subtitle:
+      "Large readable lyrics, section labels,\nslideshow mode for projection screens,\nand bilingual support in Amharic and English.",
+    onboardingSaveError: "Could not save your progress. Please try again.",
+    onboardingStatusError: "Could not load onboarding status.",
+    tryAgain: "Try again",
 
     // Notifications
     notifTitle: "Updates & notifications",
@@ -202,6 +232,10 @@ const translations = {
     nextSat: "የሚቀጥለው ቅዳሜ",
     allSongs: "ሁሉም መዝሙሮች",
     myFavs: "ተወዳጆቼ",
+    homeHeroDay: "3AMMM",
+    homeHeroWorship: "Sabba App",
+    homeHeroService: "እንኳን ደህና መጡ!",
+    seeAll: "ሁሉንም ይመልከቱ",
 
     // Songs
   
@@ -235,8 +269,34 @@ back: "ተመለስ",
     // Lyrics
     keyOf: "ቁልፍ",
     savedFav: "ወደ ተወዳጆች ተቀምጧል",
+    addFav: "ወደ ተወዳጆች ጨምር",
     removeFav: "ከተወዳጆች ያስወግዱ",
     noFavs: "እስካሁን ምንም ተወዳጅ መዝሙር የለም።\nለመቆጠብ የማንኛውንም መዝሙር ምልክት ይጫኑ።",
+    signInRequired: "መግባት ያስፈልጋል",
+    signInToFavorite: "ተወዳጅ መዝሙሮችን ለማስቀመጥ እባክዎ ይግቡ።",
+    favoriteUpdateError: "ተወዳጅነቱን ማዘመን አልተቻለም። እባክዎ እንደገና ይሞክሩ።",
+    noSongsFound: "ምንም መዝሙር አልተገኘም።",
+    noSetlists: "እስካሁን የመዝሙር ዝርዝር የለም።",
+    untitledSetlist: "ርዕስ የሌለው የመዝሙር ዝርዝር",
+    noNotifications: "እስካሁን ማሳወቂያ የለም።",
+    couldNotLoadSongs: "መዝሙሮችን መጫን አልተቻለም",
+    youAreOffline: "ከኢንተርኔት ጋር አልተገናኙም",
+    tapToRetry: "እንደገና ለመሞከር ይንኩ",
+    skip: "ዝለል",
+    next: "ቀጣይ →",
+    startWorshipping: "አምልኮ ይጀምሩ →",
+    onboarding1Title: "ሁሉም የአምልኮ መዝሙሮች\nበአንድ ቦታ",
+    onboarding1Subtitle:
+      "በመቶዎች የሚቆጠሩ የአምልኮ መዝሙሮችን ያስሱ፤\nሙሉ ግጥም፣ የዜማ ቁልፍ እና ዘማሪ መረጃ\nለቅዳሜ አገልግሎት ዝግጁ።",
+    onboarding2Title: "ለአምልኮ ቡድኖች\nየተዘጋጀ",
+    onboarding2Subtitle:
+      "የቡድናችሁን የመዝሙር ዝርዝር ይከተሉ፣\nተወዳጅ መዝሙሮችን ያስቀምጡ እና\nአገልግሎቱ ከመጀመሩ በፊት ይዘጋጁ።",
+    onboarding3Title: "በመተማመን\nዘምሩ",
+    onboarding3Subtitle:
+      "ትልቅና ግልጽ ግጥም፣ የክፍል ምልክቶች፣\nለፕሮጀክተር የስላይድ ማሳያ፣\nእንዲሁም በአማርኛና በእንግሊዝኛ ድጋፍ።",
+    onboardingSaveError: "ለውጡን ማስቀመጥ አልተቻለም። እባክዎ እንደገና ይሞክሩ።",
+    onboardingStatusError: "የመጀመሪያ ማስተዋወቂያ ሁኔታን መጫን አልተቻለም።",
+    tryAgain: "እንደገና ይሞክሩ",
 
     // Notifications
     notifTitle: "ማሳወቂያዎች እና አዳዲስ መረጃዎች",

@@ -4,12 +4,8 @@ import { publish } from './pubsub';
 import { Song } from '../screens/LyricsScreen';
 
 async function getLocalIds(): Promise<string[]> {
-  try {
-    const ids = await db.favorites.getAll();
-    return Array.isArray(ids) ? ids : [];
-  } catch {
-    return [];
-  }
+  const ids = await db.favorites.getAll();
+  return [...new Set(ids)];
 }
 
 async function getLocalSongs(allSongs?: Song[]): Promise<Song[]> {
@@ -34,51 +30,38 @@ async function toggle(
   const isGuest =
     !!profile && String(profile._id || '').startsWith('guest_');
 
+  const ids = [...new Set(await getLocalIds())];
+  const alreadyFavorited = ids.includes(songId);
+  const favorited = !alreadyFavorited;
+  const updatedIds = favorited
+    ? [...ids, songId]
+    : ids.filter((id) => id !== songId);
+
+  await db.favorites.save(updatedIds);
+  publish('favorites:changed');
+
   // Guest or unauthenticated — local only
   if (!profile || isGuest) {
-    const ids = await getLocalIds();
-    const idx = ids.indexOf(songId);
-    let favorited = false;
-    if (idx === -1) {
-      ids.push(songId);
-      favorited = true;
-    } else {
-      ids.splice(idx, 1);
-      favorited = false;
-    }
-    await db.favorites.save(ids);
-    publish('favorites:changed');
     return { favorited };
   }
 
-  // Authenticated — server first, local mirror after
+  // Update local state first so all screens respond without waiting for the server.
   try {
     const res = await api.favorites.toggle(songId);
-    // Mirror server state to local immediately
-    const local = await getLocalIds();
-    const idx = local.indexOf(songId);
-    if (res.favorited && idx === -1) {
-      local.push(songId);
-    } else if (!res.favorited && idx !== -1) {
-      local.splice(idx, 1);
+    if (res.favorited !== favorited) {
+      const local = [...new Set(await getLocalIds())];
+      const reconciled = res.favorited
+        ? [...local.filter((id) => id !== songId), songId]
+        : local.filter((id) => id !== songId);
+      await db.favorites.save(reconciled);
+      publish('favorites:changed');
     }
-    await db.favorites.save(local);
-    publish('favorites:changed');
     return { favorited: res.favorited };
-  } catch {
-    // Network down — toggle locally so UI stays responsive
-    const ids = await getLocalIds();
-    const idx = ids.indexOf(songId);
-    let favorited = false;
-    if (idx === -1) {
-      ids.push(songId);
-      favorited = true;
-    } else {
-      ids.splice(idx, 1);
-      favorited = false;
-    }
-    await db.favorites.save(ids);
-    publish('favorites:changed');
+  } catch (error) {
+    console.warn(
+      '[favoritesService] server toggle failed; keeping local change',
+      error,
+    );
     return { favorited };
   }
 }
@@ -125,8 +108,11 @@ async function refreshFromServer(profile: any): Promise<Song[] | null> {
       publish('favorites:changed');
       return server;
     }
-  } catch {
-    // Network down — silently use local cache
+  } catch (error) {
+    console.warn(
+      '[favoritesService] server refresh failed; keeping local favorites',
+      error,
+    );
   }
   return null;
 }
