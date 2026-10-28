@@ -1,13 +1,11 @@
-const express = require('express');
+﻿const express = require('express');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const { protect } = require('../middleware/auth');
 
 const jwtSecret = process.env.JWT_SECRET;
 if (!jwtSecret) {
-  throw new Error(
-    "FATAL: JWT_SECRET is not configured. Server cannot start."
-  );
+  throw new Error('FATAL: JWT_SECRET is not configured. Server cannot start.');
 }
 
 const router = express.Router();
@@ -18,22 +16,21 @@ function signToken(id) {
   });
 }
 
-// POST /api/auth/register
 router.post('/register', async (req, res) => {
   try {
     const { name, email, password, singerName } = req.body;
     if (!name || !email || !password) {
       return res.status(400).json({
-        message: "Name, email and password are required.",
+        message: 'Name, email and password are required.',
       });
     }
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      return res.status(400).json({ message: "Invalid email format." });
+      return res.status(400).json({ message: 'Invalid email format.' });
     }
     if (password.length < 8) {
       return res.status(400).json({
-        message: "Password must be at least 8 characters.",
+        message: 'Password must be at least 8 characters.',
       });
     }
 
@@ -55,7 +52,6 @@ router.post('/register', async (req, res) => {
   }
 });
 
-// POST /api/auth/google - Google OAuth authentication
 router.post('/google', async (req, res) => {
   try {
     const { googleToken } = req.body;
@@ -63,7 +59,6 @@ router.post('/google', async (req, res) => {
       return res.status(400).json({ message: 'Google token is required.' });
     }
 
-    // Exchange authorization code for tokens
     let googleUser;
     let accessToken;
 
@@ -74,7 +69,7 @@ router.post('/google', async (req, res) => {
         body: new URLSearchParams({
           code: googleToken,
           client_id: process.env.GOOGLE_CLIENT_ID || '204274728519-mjf0vtp5jj8gjltcff1ts8g5dv4lsn9v.apps.googleusercontent.com',
-          client_secret: process.env.GOOGLE_CLIENT_SECRET || '', // You need to set this
+          client_secret: process.env.GOOGLE_CLIENT_SECRET || '',
           redirect_uri: process.env.GOOGLE_REDIRECT_URI || 'com.ammm.worship://',
           grant_type: 'authorization_code',
         }),
@@ -88,14 +83,12 @@ router.post('/google', async (req, res) => {
       accessToken = tokens.access_token;
       const idToken = tokens.id_token;
 
-      // Decode ID token to get user info
       if (idToken) {
         try {
           const parts = idToken.split('.');
           const payload = Buffer.from(parts[1], 'base64').toString('utf8');
           googleUser = JSON.parse(payload);
         } catch (err) {
-          // Fallback: fetch user info using access token
           const userResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
             headers: { Authorization: `Bearer ${accessToken}` },
           });
@@ -103,7 +96,6 @@ router.post('/google', async (req, res) => {
         }
       }
     } catch (err) {
-      // Fallback: treat the token as access token directly
       accessToken = googleToken;
       const userResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
         headers: { Authorization: `Bearer ${accessToken}` },
@@ -118,21 +110,17 @@ router.post('/google', async (req, res) => {
       return res.status(400).json({ message: 'Unable to get user info from Google' });
     }
 
-    // Find or create user
     let user = await User.findOne({ email: googleUser.email });
 
     if (!user) {
-      // Create new user with Google OAuth
       user = await User.create({
         name: googleUser.name || 'User',
         email: googleUser.email,
         singerName: googleUser.name || 'User',
         googleEmail: googleUser.email,
         role: 'worshiper',
-        // No password for OAuth users
       });
     } else if (!user.googleEmail) {
-      // Link existing account to Google
       user.googleEmail = googleUser.email;
       await user.save();
     }
@@ -144,7 +132,6 @@ router.post('/google', async (req, res) => {
   }
 });
 
-// POST /api/auth/login
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -164,7 +151,6 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// GET /api/auth/me  — get current user profile
 router.get('/me', protect, async (req, res) => {
   res.json({ user: req.user });
 });

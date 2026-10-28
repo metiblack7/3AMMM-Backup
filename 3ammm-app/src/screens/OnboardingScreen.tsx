@@ -16,6 +16,7 @@ import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useApp } from "../lib/AppContext";
+import { useTheme } from "../lib/useTheme";
 
 interface OnboardingScreenProps {
   onComplete: () => Promise<void>;
@@ -48,6 +49,7 @@ export default function OnboardingScreen({
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
   const { t } = useApp();
+  const { C, isDark } = useTheme();
   const listRef = useRef<FlatList<(typeof SLIDES)[number]>>(null);
   const iconOpacity = useRef(new Animated.Value(1)).current;
   const iconScale = useRef(new Animated.Value(1)).current;
@@ -113,7 +115,7 @@ export default function OnboardingScreen({
   };
 
   return (
-    <View style={styles.screen}>
+    <View style={[styles.screen, { backgroundColor: C.bg }]}>
       <FlatList
         ref={listRef}
         data={SLIDES}
@@ -132,7 +134,9 @@ export default function OnboardingScreen({
         renderItem={({ item, index }) => (
           <View style={[styles.slide, { width, height }]}>
             <LinearGradient
-              colors={item.colors}
+              colors={
+                isDark ? item.colors : [C.bg, C.bgDeep, C.surfaceHigh]
+              }
               locations={[0, 0.55, 1]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
@@ -150,7 +154,9 @@ export default function OnboardingScreen({
                   onPress={finish}
                   disabled={completing}
                   hitSlop={12}>
-                  <Text style={styles.skipText}>{t.skip}</Text>
+                  <Text style={[styles.skipText, { color: C.text2 }]}>
+                    {t.skip}
+                  </Text>
                 </TouchableOpacity>
               ) : null}
             </View>
@@ -167,6 +173,8 @@ export default function OnboardingScreen({
                 style={[
                   styles.iconHalo,
                   {
+                    backgroundColor: C.skyPale,
+                    borderColor: C.skyBorder,
                     opacity: activeIndex === index ? iconOpacity : 1,
                     transform: [
                       {
@@ -175,15 +183,23 @@ export default function OnboardingScreen({
                     ],
                   },
                 ]}>
-                <Feather name={item.icon} size={80} color="#87ceeb" />
+                <Feather name={item.icon} size={80} color={C.sky} />
               </Animated.View>
 
-              <Text style={styles.headline}>{t[item.headlineKey]}</Text>
-              <Text style={styles.subtitle}>{t[item.subtitleKey]}</Text>
-              <View style={styles.goldLine} />
+              <Text style={[styles.headline, { color: C.text }]}>
+                {t[item.headlineKey]}
+              </Text>
+              <Text style={[styles.subtitle, { color: C.text2 }]}>
+                {t[item.subtitleKey]}
+              </Text>
+              <View style={[styles.goldLine, { backgroundColor: C.gold }]} />
 
               <View style={styles.footer}>
-                {error ? <Text style={styles.errorText}>{error}</Text> : null}
+                {error ? (
+                  <Text style={[styles.errorText, { color: C.danger }]}>
+                    {error}
+                  </Text>
+                ) : null}
                 {index < SLIDES.length - 1 ? (
                   <TouchableOpacity
                     accessibilityRole="button"
@@ -192,7 +208,7 @@ export default function OnboardingScreen({
                     disabled={completing}
                     activeOpacity={0.85}>
                     <LinearGradient
-                      colors={["#87ceeb", "#5bb8e0"]}
+                      colors={[C.sky, C.skyDeep]}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 0 }}
                       style={styles.nextButton}>
@@ -208,7 +224,7 @@ export default function OnboardingScreen({
                     disabled={completing}
                     activeOpacity={0.85}>
                     <LinearGradient
-                      colors={["#fbb040", "#d4920e"]}
+                      colors={[C.gold, C.goldDark]}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 0 }}
                       style={[styles.nextButton, styles.startButton]}>
@@ -234,8 +250,8 @@ export default function OnboardingScreen({
                           width: dotWidths[dotIndex],
                           backgroundColor:
                             activeIndex === dotIndex
-                              ? "#87ceeb"
-                              : "rgba(135,206,235,0.25)",
+                              ? C.sky
+                              : C.skyPale,
                         },
                       ]}
                     />

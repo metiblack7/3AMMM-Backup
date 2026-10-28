@@ -98,9 +98,13 @@ interface AppProviderProps {
 function SplashOverlay({
   loading,
   onExitComplete,
+  C,
+  isDark,
 }: {
   loading: boolean;
   onExitComplete: () => void;
+  C: ThemeColors;
+  isDark: boolean;
 }) {
   const { width } = useWindowDimensions();
 
@@ -241,12 +245,24 @@ function SplashOverlay({
 
   return (
     <Animated.View
-      style={[styles.splashContainer, { opacity: containerOpacity }]}>
+      style={[
+        styles.splashContainer,
+        { opacity: containerOpacity, backgroundColor: C.bg },
+      ]}>
       <PlatformBlur
         intensity={55}
-        isDark
+        isDark={isDark}
         style={StyleSheet.absoluteFillObject}>
-        <View style={styles.blurTint} />
+        <View
+          style={[
+            styles.blurTint,
+            {
+              backgroundColor: isDark
+                ? "rgba(7,11,20,0.28)"
+                : "rgba(244,250,253,0.18)",
+            },
+          ]}
+        />
       </PlatformBlur>
 
       <Animated.View
@@ -266,6 +282,7 @@ function SplashOverlay({
           style={[
             styles.title,
             {
+              color: C.text,
               opacity: titleOpacity,
               transform: [{ translateY: titleTranslateY }],
             },
@@ -277,6 +294,7 @@ function SplashOverlay({
           style={[
             styles.subtitle,
             {
+              color: C.text2,
               opacity: subtitleOpacity,
               transform: [{ translateY: subtitleTranslateY }],
             },
@@ -583,6 +601,8 @@ export function AppProvider({ children }: AppProviderProps) {
       {showSplash && (
         <SplashOverlay
           loading={loading}
+          C={C}
+          isDark={darkMode}
           onExitComplete={() => setShowSplash(false)}
         />
       )}
@@ -601,7 +621,6 @@ export const useApp = () => {
 const styles = StyleSheet.create({
   splashContainer: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "#021620",
     alignItems: "center",
     justifyContent: "center",
     zIndex: 9999,
@@ -619,7 +638,6 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   title: {
-    color: "#FFFFFF",
     fontSize: 28,
     fontWeight: "600",
     letterSpacing: 0.8,
@@ -627,7 +645,6 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     marginTop: 8,
-    color: "#FFFFFF",
     fontSize: 18,
     fontWeight: "500",
     letterSpacing: 0.4,

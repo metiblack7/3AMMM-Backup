@@ -657,10 +657,21 @@ export default function LyricsScreen({
         <BlurView
           blurTarget={lyricsBlurTarget}
           blurMethod="dimezisBlurView"
-          intensity={60}
-          tint={isDark ? "systemUltraThinMaterialDark" : "default"}
+          intensity={42}
+          tint={isDark ? "dark" : "light"}
           pointerEvents="none"
           style={StyleSheet.absoluteFill}
+        />
+        <View
+          pointerEvents="none"
+          style={[
+            StyleSheet.absoluteFill,
+            {
+              backgroundColor: isDark
+                ? "rgba(2,22,36,0.10)"
+                : "rgba(244,250,253,0.16)",
+            },
+          ]}
         />
         <LinearGradient
           colors={headerSheenColors}
@@ -670,7 +681,17 @@ export default function LyricsScreen({
           style={StyleSheet.absoluteFill}
           pointerEvents="none"
         />
-        <View style={s.headerTopSheen} pointerEvents="none" />
+        <View
+          style={[
+            s.headerTopSheen,
+            {
+              backgroundColor: isDark
+                ? "rgba(255,255,255,0.16)"
+                : "rgba(255,255,255,0.75)",
+            },
+          ]}
+          pointerEvents="none"
+        />
         <LinearGradient
           colors={headerEdgeColors}
           start={{ x: 0, y: 0 }}

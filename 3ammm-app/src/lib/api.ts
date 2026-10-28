@@ -2,7 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { API_URL, logError } from "./env";
 
 const TOKEN_KEY = "3ammm_token";
-const TIMEOUT_MS = 25000; // increased from 10s — Vercel cold start can take 15-25s
+const TIMEOUT_MS = 25000;
 
 export async function getToken(): Promise<string | null> {
   return AsyncStorage.getItem(TOKEN_KEY);
@@ -16,18 +16,11 @@ export async function clearToken(): Promise<void> {
   await AsyncStorage.removeItem(TOKEN_KEY);
 }
 
-// ── Unauthorized hook ───────────────────────────────────────────
-// Lets AppContext react the moment the server rejects the stored
-// token (401), from ANY request — not just the initial /auth/me
-// check. Without this, every screen keeps retrying with the same
-// dead token and 401ing on every endpoint, forever, instead of the
-// app dropping back to the login screen once.
 let onUnauthorized: (() => void) | null = null;
 export function setUnauthorizedHandler(fn: () => void) {
   onUnauthorized = fn;
 }
 
-// ── Fetch with timeout + better error messages ────────────────
 async function fetchWithTimeout(
   url: string,
   options: RequestInit = {},
@@ -45,19 +38,17 @@ async function fetchWithTimeout(
   } catch (err: any) {
     if (err.name === "AbortError") {
       throw new Error(
-        `Request timed out when reaching ${url}. The server may be waking up — please try again in a moment.`,
+        `Request timed out when reaching ${url}. The server may be waking up � please try again in a moment.`,
       );
     }
-    // Network unreachable
     const message = `Cannot reach the server at ${url}. Check your internet connection or start the backend on ${API_URL}`;
-    logError('Network error', url, err.message ?? err);
+    logError("Network error", url, err.message ?? err);
     throw new Error(message);
   } finally {
     clearTimeout(timer);
   }
 }
 
-// ── Retry wrapper — retries on timeout/network errors only ────
 async function fetchWithRetry(
   url: string,
   options: RequestInit = {},
@@ -67,22 +58,17 @@ async function fetchWithRetry(
 
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
-      // Give each retry a little more time
       const timeout = TIMEOUT_MS + attempt * 5000;
       return await fetchWithTimeout(url, options, timeout);
     } catch (err: any) {
       lastError = err;
-      // Only retry on timeout/network errors, not 4xx/5xx
       const isRetryable =
         err.message.includes("timed out") ||
         err.message.includes("Cannot reach");
 
-      // Log each retry attempt with URL for easier debugging
-      logError('API request failed (attempt)', { url, attempt, message: err.message });
+      logError("API request failed (attempt)", { url, attempt, message: err.message });
 
       if (!isRetryable || attempt === retries) throw err;
-
-      // Wait before retrying (1s, 2s)
       await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
     }
   }
@@ -90,7 +76,43 @@ async function fetchWithRetry(
   throw lastError;
 }
 
-// ── Main fetch wrapper ────────────────────────────────────────
+export function isArrayResponse<T>(value: unknown): value is T[] {
+  return Array.isArray(value);
+}
+
+export function expectArrayResponse<T>(value: unknown, label: string): T[] {
+  if (Array.isArray(value)) {
+    return value as T[];
+  }
+
+  if (value && typeof value === "object") {
+    const nested =
+      (value as any).items ??
+      (value as any).data ??
+      (value as any).songs ??
+      (value as any).results ??
+      (value as any).favorites;
+
+    if (Array.isArray(nested)) {
+      return nested as T[];
+    }
+  }
+
+  throw new Error(`${label} response was not an array.`);
+}
+
+function normalizeIdsResponse(value: unknown, label: string): string[] {
+  if (Array.isArray(value)) {
+    return value.filter((entry): entry is string => typeof entry === "string");
+  }
+  if (value && typeof value === "object" && Array.isArray((value as any).ids)) {
+    return (value as any).ids.filter(
+      (entry: unknown): entry is string => typeof entry === "string",
+    );
+  }
+  throw new Error(`${label} response was not an array.`);
+}
+
 export async function apiFetch(
   path: string,
   options: RequestInit = {},
@@ -107,10 +129,8 @@ export async function apiFetch(
   }
 
   const url = `${API_URL}${path}`;
-
   const response = await fetchWithRetry(url, { ...options, headers });
 
-  // Parse response
   let data: any;
   const contentType = response.headers.get("content-type") ?? "";
 
@@ -126,12 +146,8 @@ export async function apiFetch(
   }
 
   if (!response.ok) {
-    const message =
-      data?.message || data?.error || `Server error (${response.status})`;
+    const message = data?.message || data?.error || `Server error (${response.status})`;
 
-    // The stored token is dead (expired, wrong secret, revoked, etc).
-    // Clear it immediately and notify the app instead of letting
-    // every other request keep retrying with the same bad token.
     if (response.status === 401) {
       await clearToken();
       onUnauthorized?.();
@@ -143,7 +159,6 @@ export async function apiFetch(
   return data;
 }
 
-// ── API methods ───────────────────────────────────────────────
 export const api = {
   auth: {
     login: (email: string, password: string) =>
@@ -162,7 +177,6 @@ export const api = {
         body: JSON.stringify({ name, email, password, singerName }),
       }),
     me: () => apiFetch("/api/auth/me"),
-
     googleAuth: (
       accessToken: string,
       idToken: string,
@@ -176,9 +190,7 @@ export const api = {
 
   songs: {
     getAll: (params?: Record<string, string>) => {
-      const qs = params
-        ? "?" + new URLSearchParams(params).toString()
-        : "";
+      const qs = params ? "?" + new URLSearchParams(params).toString() : "";
       return apiFetch(`/api/songs${qs}`);
     },
     getSingers: () => apiFetch("/api/songs/singers"),
@@ -193,8 +205,7 @@ export const api = {
         method: "PUT",
         body: JSON.stringify(data),
       }),
-    delete: (id: string) =>
-      apiFetch(`/api/songs/${id}`, { method: "DELETE" }),
+    delete: (id: string) => apiFetch(`/api/songs/${id}`, { method: "DELETE" }),
   },
 
   setlists: {
@@ -209,8 +220,7 @@ export const api = {
         method: "PUT",
         body: JSON.stringify(data),
       }),
-    delete: (id: string) =>
-      apiFetch(`/api/setlists/${id}`, { method: "DELETE" }),
+    delete: (id: string) => apiFetch(`/api/setlists/${id}`, { method: "DELETE" }),
   },
 
   favorites: {
@@ -218,8 +228,6 @@ export const api = {
     getIds: () => apiFetch("/api/favorites/ids"),
     toggle: (songId: string) =>
       apiFetch(`/api/favorites/${songId}`, { method: "POST" }),
-    // Batch-merge favorites: send an array of song IDs to add to the
-    // user's favorites. Server will ignore already-existing entries.
     merge: (songIds: string[]) =>
       apiFetch(`/api/favorites/merge`, {
         method: "POST",

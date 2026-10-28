@@ -381,16 +381,24 @@ function SongsTabComponent({
         if (force || cached.length === 0) {
           try {
             const [songsData, singersData] = await Promise.all([
-              api.songs.getAll(),
-              api.songs.getSingers(),
+              api.songs.getAll().catch(() => []),
+              api.songs.getSingers().catch(() => []),
             ]);
-            setSongs(songsData);
-            setSingers(["All", ...singersData]);
-            onSongsLoaded?.(songsData);
-            try {
-              await db.songs.save(songsData as any);
-            } catch {
-              // ignore local save errors
+            const normalizedSongs = Array.isArray(songsData) ? songsData : [];
+            const normalizedSingers = Array.isArray(singersData) ? singersData : [];
+
+            if (normalizedSongs.length > 0) {
+              setSongs(normalizedSongs);
+              onSongsLoaded?.(normalizedSongs);
+              try {
+                await db.songs.save(normalizedSongs as any);
+              } catch {
+                // ignore local save errors
+              }
+            }
+
+            if (normalizedSingers.length > 0) {
+              setSingers(["All", ...normalizedSingers]);
             }
           } catch (err: any) {
             setError(
@@ -567,9 +575,9 @@ function SongsTabComponent({
     return (
       <SongsLoadingSkeleton
         topPadding={FULL_HEADER_HEIGHT}
-        bg="#010f18"
-        surface="#021624"
-        border="rgba(135,206,235,0.10)"
+        bg={C.bg}
+        surface={C.surface}
+        border={C.border}
       />
     );
   }
@@ -579,21 +587,24 @@ function SongsTabComponent({
       <View
         style={[
           es.errorWrap,
-          { backgroundColor: "#010f18", paddingTop: TOP_PADDING + 24 },
+          { backgroundColor: C.bg, paddingTop: TOP_PADDING + 24 },
         ]}>
         <Feather
           name={isOnline ? "alert-circle" : "wifi-off"}
           size={40}
-          color="rgba(135,206,235,0.45)"
+          color={C.text3}
         />
-        <Text style={[es.errorTitle, { color: "#ffffff" }]}>
+        <Text style={[es.errorTitle, { color: C.text }]}>
           {isOnline ? t.couldNotLoadSongs : t.youAreOffline}
         </Text>
         <Text style={[es.errorMsg, { color: C.danger }]}>{error}</Text>
         <TouchableOpacity
-          style={[es.retryBtn, { backgroundColor: "#87ceeb" }]}
+          style={[
+            es.retryBtn,
+            { backgroundColor: isDark ? C.sky : C.skyDeep },
+          ]}
           onPress={() => load(true)}>
-          <Text style={[es.retryText, { color: "#010f18" }]}>
+          <Text style={[es.retryText, { color: isDark ? C.bg : "#ffffff" }]}>
             {t.tapToRetry}
           </Text>
         </TouchableOpacity>
@@ -602,7 +613,7 @@ function SongsTabComponent({
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#010f18" }}>
+    <View style={{ flex: 1, backgroundColor: C.bg }}>
       {/* ── SONG LIST ─────────────────────────────────────────── */}
       <FlatList
         ref={listRef}
@@ -611,7 +622,7 @@ function SongsTabComponent({
         renderItem={renderSongItem}
         ListEmptyComponent={
           <EmptyState
-            icon={<Feather name="music" size={22} color="#87ceeb" />}
+            icon={<Feather name="music" size={22} color={C.sky} />}
             text={t.noSongsFound}
           />
         }
@@ -619,7 +630,7 @@ function SongsTabComponent({
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor="#87ceeb"
+            tintColor={C.sky}
             progressViewOffset={FULL_HEADER_HEIGHT}
           />
         }

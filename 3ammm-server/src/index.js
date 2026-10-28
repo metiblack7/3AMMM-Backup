@@ -15,8 +15,14 @@ const app = express();
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const PORT     = process.env.PORT || 5000;
 
+const configuredAllowedOrigins = (process.env.CORS_ORIGIN || process.env.ALLOWED_ORIGINS || '')
+  .split(',')
+  .map((value) => value.trim())
+  .filter(Boolean);
+
 const allowedOrigins = new Set([
   "https://sabaserver.vercel.app",
+  "https://sabaserver-197kka0js-metages-amares-projects.vercel.app",
   "http://localhost:8081",
   "http://localhost:8082",
   "http://localhost:8083",
@@ -27,14 +33,33 @@ const allowedOrigins = new Set([
   "http://192.168.1.1:8081",
   "http://192.168.1.1:8082",
   "http://192.168.1.1:8083",
+  ...configuredAllowedOrigins,
 ]);
 
 app.use(
   cors({
     origin(origin, callback) {
-      if (!origin || allowedOrigins.has(origin)) {
+      if (!origin) {
         return callback(null, true);
       }
+
+      if (allowedOrigins.has(origin)) {
+        return callback(null, true);
+      }
+
+      const allowVercelPreviews = process.env.ALLOW_VERCEL_PREVIEWS === 'true';
+      const hostname = (() => {
+        try {
+          return new URL(origin).hostname;
+        } catch {
+          return '';
+        }
+      })();
+
+      if (allowVercelPreviews && hostname.endsWith('.vercel.app')) {
+        return callback(null, true);
+      }
+
       return callback(new Error("Origin not allowed by CORS"));
     },
     credentials: true,
@@ -43,6 +68,7 @@ app.use(
   })
 );
 
+app.options('*', cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 

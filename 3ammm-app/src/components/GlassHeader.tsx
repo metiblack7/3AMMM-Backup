@@ -63,10 +63,21 @@ export default function GlassHeader({
       <BlurView
         blurTarget={blurTarget}
         blurMethod="dimezisBlurView"
-        intensity={60}
-        tint={isDark ? "systemUltraThinMaterialDark" : "default"}
+        intensity={42}
+        tint={isDark ? "dark" : "light"}
         pointerEvents="none"
         style={StyleSheet.absoluteFill}
+      />
+      <View
+        pointerEvents="none"
+        style={[
+          StyleSheet.absoluteFill,
+          {
+            backgroundColor: isDark
+              ? "rgba(2,22,36,0.10)"
+              : "rgba(244,250,253,0.16)",
+          },
+        ]}
       />
       <LinearGradient
         colors={sheenColors}
@@ -75,7 +86,16 @@ export default function GlassHeader({
         end={{ x: 1, y: 0 }}
         style={StyleSheet.absoluteFill}
       />
-      <View style={styles.topSheen} />
+      <View
+        style={[
+          styles.topSheen,
+          {
+            backgroundColor: isDark
+              ? "rgba(255,255,255,0.16)"
+              : "rgba(255,255,255,0.75)",
+          },
+        ]}
+      />
       <LinearGradient
         colors={
           isDark
@@ -103,9 +123,21 @@ export default function GlassHeader({
             onPress={onBack}
             activeOpacity={0.75}
             style={styles.backButton}>
-            <View style={styles.backButtonBackground} />
+            <View
+              style={[
+                styles.backButtonBackground,
+                {
+                  backgroundColor: C.glass,
+                  borderColor: C.glassBorder,
+                },
+              ]}
+            />
             <LinearGradient
-              colors={["rgba(255,255,255,0.14)", "rgba(255,255,255,0.03)"]}
+              colors={
+                isDark
+                  ? ["rgba(255,255,255,0.14)", "rgba(255,255,255,0.03)"]
+                  : ["rgba(255,255,255,0.70)", "rgba(255,255,255,0.12)"]
+              }
               start={{ x: 0, y: 0 }}
               end={{ x: 0, y: 1 }}
               style={StyleSheet.absoluteFill}
@@ -120,7 +152,7 @@ export default function GlassHeader({
           </Text>
           {subtitle ? (
             <View style={styles.subtitleRow}>
-              <View style={[styles.subtitleDot, { backgroundColor: C.text2 }]} />
+              <View style={[styles.subtitleDot, { backgroundColor: C.sky }]} />
               <Text
                 style={[styles.subtitle, { color: C.text2 }]}
                 numberOfLines={1}>

@@ -87,6 +87,15 @@ async function mergeLocalOnSignIn(profile: any) {
   }
 }
 
+function getSongIds(songs: unknown[]): string[] {
+  return songs.flatMap((song) => {
+    if (!song || typeof song !== 'object' || !('_id' in song)) return [];
+    return typeof song._id === 'string' && song._id.length > 0
+      ? [song._id]
+      : [];
+  });
+}
+
 async function refreshFromServer(profile: any): Promise<Song[] | null> {
   if (!profile) return null;
   const isGuest = String(profile._id || '').startsWith('guest_');
@@ -96,17 +105,21 @@ async function refreshFromServer(profile: any): Promise<Song[] | null> {
     // Get full song objects from server
     const server = await api.favorites.getAll();
     if (Array.isArray(server)) {
-      // Save IDs locally
-      const sids = server.map((s: any) => s._id).filter(Boolean);
-      await db.favorites.save(sids);
-      // Cache song data locally
+      const songIds = getSongIds(server);
+      await db.favorites.save([...new Set(songIds)]);
       try {
-        await db.songs.save(server as any);
+        await db.songs.save(server.filter((s: any) => s && typeof s === 'object') as any);
       } catch {
         // ignore cache errors
       }
       publish('favorites:changed');
       return server;
+    }
+    if (Array.isArray(server?.songs)) {
+      const songIds = getSongIds(server.songs);
+      await db.favorites.save([...new Set(songIds)]);
+      publish('favorites:changed');
+      return server.songs;
     }
   } catch (error) {
     console.warn(

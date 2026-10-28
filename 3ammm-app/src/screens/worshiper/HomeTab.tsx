@@ -11,6 +11,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Feather } from "@expo/vector-icons";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/AppContext";
+import { useTheme } from "../../lib/useTheme";
 import { Spacing } from "../../theme";
 import { Song } from "../LyricsScreen";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -33,6 +34,7 @@ function HomeTabComponent({
 }: Props) {
   const insets = useSafeAreaInsets();
   const { profile, t, fs } = useApp();
+  const { C, isDark } = useTheme();
 
   const [songs, setSongs] = useState<Song[]>([]);
   const [setlists, setSetlists] = useState<Setlist[]>([]);
@@ -70,19 +72,22 @@ function HomeTabComponent({
         api.setlists.getAll().catch(() => []),
       ]);
 
-      if (Array.isArray(songsData) && songsData.length > 0) {
-        setSongs(songsData);
+      const normalizedSongs = Array.isArray(songsData) ? songsData : [];
+      const normalizedSetlists = Array.isArray(setlistsData) ? setlistsData : [];
+
+      if (normalizedSongs.length > 0) {
+        setSongs(normalizedSongs);
         try {
-          await db.songs.save(songsData as any);
+          await db.songs.save(normalizedSongs as any);
         } catch {
           // ignore cache write failures
         }
       }
 
-      if (Array.isArray(setlistsData) && setlistsData.length > 0) {
-        setSetlists(setlistsData);
+      if (normalizedSetlists.length > 0) {
+        setSetlists(normalizedSetlists);
         try {
-          await db.setlists.save(setlistsData as any);
+          await db.setlists.save(normalizedSetlists as any);
         } catch {
           // ignore cache write failures
         }
@@ -143,7 +148,7 @@ function HomeTabComponent({
     [nextSetlist, songs],
   );
 
-  const s = makeStyles();
+  const s = makeStyles(C);
 
   return (
     <View style={s.screen}>
@@ -157,12 +162,16 @@ function HomeTabComponent({
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor="#87ceeb"
+            tintColor={C.sky}
           />
         }>
         {/* HERO BANNER */}
         <LinearGradient
-          colors={["#021624", "#032538"]}
+          colors={
+            isDark
+              ? [C.surface, C.surfaceHigh]
+              : [C.bgDeep, C.surfaceHigh]
+          }
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={s.heroBanner}>
@@ -170,8 +179,8 @@ function HomeTabComponent({
           <Feather
             name="music"
             size={64}
-            color="rgba(135,206,235,0.15)"
-            style={s.heroIcon}
+            color={C.sky}
+            style={[s.heroIcon, { opacity: isDark ? 0.15 : 0.12 }]}
           />
           <View style={s.heroText}>
             <Text style={s.heroEyebrow}>{t.homeHeroDay}</Text>
@@ -200,7 +209,7 @@ function HomeTabComponent({
             <View style={s.card}>
               <View style={s.cardDecoration} />
               <View style={s.cardIconBox}>
-                <Feather name="music" size={20} color="#87ceeb" />
+                <Feather name="music" size={20} color={C.sky} />
               </View>
               <Text style={[s.cardNum, { fontSize: fs(28) }]}>
                 {songs.length}
@@ -218,7 +227,7 @@ function HomeTabComponent({
             <View style={s.card}>
               <View style={s.cardDecoration} />
               <View style={s.cardIconBox}>
-                <Feather name="heart" size={20} color="#87ceeb" />
+                <Feather name="heart" size={20} color={C.sky} />
               </View>
               <Text style={[s.cardNum, { fontSize: fs(28) }]}>{favCount}</Text>
               <Text style={[s.cardLabel, { fontSize: fs(12) }]}>
@@ -292,9 +301,9 @@ function HomeTabComponent({
 
 export default React.memo(HomeTabComponent);
 
-const makeStyles = () =>
+const makeStyles = (C: ReturnType<typeof useTheme>["C"]) =>
   StyleSheet.create({
-    screen: { flex: 1, backgroundColor: "#010f18" },
+    screen: { flex: 1, backgroundColor: C.bg },
     heroBanner: {
       height: 200,
       margin: Spacing.lg,
@@ -316,25 +325,25 @@ const makeStyles = () =>
       borderRadius: 60,
       bottom: -34,
       right: -24,
-      backgroundColor: "rgba(135,206,235,0.06)",
+      backgroundColor: C.skyPale,
     },
     heroText: {
       marginLeft: 70,
       zIndex: 1,
     },
     heroEyebrow: {
-      color: "#87ceeb",
+      color: C.text2,
       fontSize: 11,
       fontWeight: "700",
       letterSpacing: 2,
       marginBottom: 3,
     },
     heroTitle: {
-      color: "#ffffff",
+      color: C.text,
       fontWeight: "800",
       lineHeight: 36,
     },
-    heroTitleAccent: { color: "#87ceeb" },
+    heroTitleAccent: { color: C.sky },
     heroWelcome: {
       fontWeight: "400",
       lineHeight: 32,
@@ -343,7 +352,7 @@ const makeStyles = () =>
       width: 40,
       height: 2,
       borderRadius: 1,
-      backgroundColor: "#fbb040",
+      backgroundColor: C.gold,
       marginTop: 10,
     },
     cardsRow: {
@@ -356,8 +365,8 @@ const makeStyles = () =>
       minHeight: 148,
       borderRadius: 16,
       borderWidth: 1,
-      borderColor: "rgba(135,206,235,0.10)",
-      backgroundColor: "#021624",
+      borderColor: C.border,
+      backgroundColor: C.surface,
       padding: 16,
       overflow: "hidden",
     },
@@ -368,24 +377,24 @@ const makeStyles = () =>
       borderRadius: 30,
       top: -16,
       right: -16,
-      backgroundColor: "rgba(135,206,235,0.05)",
+      backgroundColor: C.skyPale,
     },
     cardIconBox: {
       width: 36,
       height: 36,
       borderRadius: 18,
-      backgroundColor: "rgba(135,206,235,0.10)",
+      backgroundColor: C.skyMid,
       alignItems: "center",
       justifyContent: "center",
       marginBottom: 8,
     },
     cardNum: {
       fontWeight: "700",
-      color: "#ffffff",
+      color: C.text,
     },
     cardLabel: {
       fontWeight: "600",
-      color: "rgba(135,206,235,0.75)",
+      color: C.text2,
     },
     secHdr: {
       flexDirection: "row",
@@ -396,11 +405,11 @@ const makeStyles = () =>
     },
     secTitle: {
       fontWeight: "600",
-      color: "#ffffff",
+      color: C.text,
       flex: 1,
     },
     seeAll: {
-      color: "rgba(135,206,235,0.65)",
+      color: C.text2,
       fontSize: 12,
     },
     nextSlCardWrap: {
@@ -412,31 +421,31 @@ const makeStyles = () =>
     nextSlCard: {
       borderRadius: 20,
       borderWidth: 1,
-      borderColor: "rgba(135,206,235,0.10)",
-      backgroundColor: "#021624",
+      borderColor: C.border,
+      backgroundColor: C.surface,
     },
     nextSlHdr: {
       flexDirection: "row",
       alignItems: "center",
       padding: 14,
       borderBottomWidth: 0.5,
-      borderBottomColor: "rgba(251,176,64,0.15)",
-      backgroundColor: "rgba(251,176,64,0.08)",
+      borderBottomColor: C.goldBorder,
+      backgroundColor: C.goldDeep,
     },
     dateBadge: {
       borderRadius: 8,
       paddingHorizontal: 10,
       paddingVertical: 5,
-      backgroundColor: "rgba(251,176,64,0.14)",
+      backgroundColor: C.goldDeep,
     },
     dateText: {
       fontSize: 11,
       fontWeight: "700",
-      color: "#fbb040",
+      color: C.gold,
     },
     slTheme: {
       fontWeight: "700",
-      color: "#ffffff",
+      color: C.text,
       flex: 1,
       marginLeft: 10,
     },
@@ -444,12 +453,12 @@ const makeStyles = () =>
       borderRadius: 8,
       paddingHorizontal: 10,
       paddingVertical: 4,
-      backgroundColor: "rgba(251,176,64,0.12)",
+      backgroundColor: C.goldDeep,
     },
     slCountText: {
       fontSize: 12,
       fontWeight: "700",
-      color: "#fbb040",
+      color: C.gold,
     },
     slSong: {
       flexDirection: "row",
@@ -460,19 +469,19 @@ const makeStyles = () =>
     },
     slSongBorder: {
       borderBottomWidth: 0.5,
-      borderBottomColor: "rgba(135,206,235,0.06)",
+      borderBottomColor: C.border,
     },
     slNum: {
       fontWeight: "700",
       width: 18,
-      color: "#fbb040",
+      color: C.gold,
     },
     slName: {
       fontWeight: "600",
-      color: "#ffffff",
+      color: C.text,
     },
     slSinger: {
       fontSize: 12,
-      color: "#87ceeb",
+      color: C.text2,
     },
   });
