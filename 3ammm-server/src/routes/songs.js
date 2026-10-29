@@ -34,9 +34,11 @@ function performSearch(songs, query) {
 }
 
 router.get('/', async (req, res) => {
+  const startedAt = Date.now();
   try {
     const { search, singer } = req.query;
-    let songs = await Song.find().sort({ title: 1 });
+    console.info('[songs] list query started');
+    let songs = await Song.find().sort({ title: 1 }).maxTimeMS(4000).exec();
 
     if (singer) {
       songs = songs.filter((s) => s.singerName === singer);
@@ -46,18 +48,34 @@ router.get('/', async (req, res) => {
       songs = performSearch(songs, search);
     }
 
+    console.info(`[songs] list complete ms=${Date.now() - startedAt} count=${songs.length}`);
     res.json(songs);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error(
+      `[songs] list failed ms=${Date.now() - startedAt} code=${err.code || 'unknown'}`,
+    );
+    res.status(503).json({
+      message: 'Unable to load songs right now.',
+      code: 'SONGS_QUERY_FAILED',
+    });
   }
 });
 
 router.get('/singers', async (req, res) => {
+  const startedAt = Date.now();
   try {
-    const singers = await Song.distinct('singerName');
+    console.info('[songs] singers query started');
+    const singers = await Song.distinct('singerName').maxTimeMS(4000).exec();
+    console.info(`[songs] singers complete ms=${Date.now() - startedAt} count=${singers.length}`);
     res.json(singers.sort());
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error(
+      `[songs] singers failed ms=${Date.now() - startedAt} code=${err.code || 'unknown'}`,
+    );
+    res.status(503).json({
+      message: 'Unable to load singers right now.',
+      code: 'SINGERS_QUERY_FAILED',
+    });
   }
 });
 

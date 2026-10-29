@@ -13,11 +13,6 @@ const MONGO_SOURCE = process.env.MONGODB_URI
       ? 'MONGO_PUBLIC_URL'
       : 'none';
 
-const formatUriLog = (uri) => {
-  if (!uri) return 'none';
-  return uri.replace(/mongodb(\+srv)?:\/\/.+@/, 'mongodb$1://<auth>@');
-};
-
 const buildMongoUri = (uri) => {
   if (!uri) return uri;
   const normalized = uri.trim();
@@ -35,18 +30,15 @@ const buildMongoUri = (uri) => {
 
 const MONGO_URI = buildMongoUri(rawMongoUri);
 
-// bufferCommands: true allows Mongoose to queue operations while
-// the connection is being established — critical for serverless
-// where the DB middleware awaits the connection but route handlers
-// may still fire before it fully resolves on the first cold start.
 const MONGO_OPTIONS = {
-  serverSelectionTimeoutMS: 10000,
-  connectTimeoutMS: 10000,
-  socketTimeoutMS: 45000,
+  serverSelectionTimeoutMS: 4000,
+  connectTimeoutMS: 4000,
+  socketTimeoutMS: 10000,
   maxPoolSize: 5,
   minPoolSize: 0,
-  bufferCommands: true,
 };
+
+mongoose.set('bufferCommands', false);
 
 // Global cache — survives across Vercel serverless invocations
 // within the same container, preventing a new connection on every
@@ -61,27 +53,38 @@ function isConnected() {
 }
 
 async function connectServerless() {
-  // Already connected — reuse
-  if (isConnected() && cached.conn) return cached.conn;
+  if (isConnected()) {
+    cached.conn = mongoose.connection;
+    return cached.conn;
+  }
 
-  // Connection in progress — wait for it
-  if (cached.promise) return cached.promise;
+  if (cached.promise) {
+    try {
+      const conn = await cached.promise;
+      if (isConnected()) return conn;
+    } catch {
+      cached.promise = null;
+      cached.conn = null;
+    }
+  }
+
+  cached.promise = null;
+  cached.conn = null;
 
   if (!MONGO_URI) {
     throw new Error('No MongoDB connection string provided. Set MONGODB_URI on Vercel.');
   }
 
-  console.log(`🔧 MongoDB source: ${MONGO_SOURCE}`, formatUriLog(MONGO_URI));
+  console.info(`[db] connecting; source=${MONGO_SOURCE}`);
 
   cached.promise = mongoose
     .connect(MONGO_URI, MONGO_OPTIONS)
     .then((conn) => {
-      console.log(`✅ MongoDB connected: ${conn.connection.host}`);
       cached.conn = conn;
+      console.info('[db] connected');
       return conn;
     })
     .catch((err) => {
-      // Reset so the next request can retry
       cached.promise = null;
       cached.conn = null;
       throw err;
@@ -107,17 +110,15 @@ async function connectDB(options = {}) {
     try {
       if (isConnected()) return mongoose.connection;
 
-      console.log(`🔧 MongoDB source: ${MONGO_SOURCE}`, formatUriLog(MONGO_URI));
+      console.info(`[db] connecting; source=${MONGO_SOURCE}`);
       const conn = await mongoose.connect(MONGO_URI, MONGO_OPTIONS);
-      console.log(`✅ MongoDB connected: ${conn.connection.host}`);
+      console.info('[db] connected');
       return conn;
     } catch (err) {
       console.error(
-        `❌ MongoDB connection error (attempt ${attempt}/${retries}):`,
-        err.message,
+        `[db] connection failed attempt=${attempt}/${retries} name=${err.name || 'Error'} code=${err.code || 'unknown'}`,
       );
       if (attempt === retries) {
-        console.error(err);
         process.exit(1);
       }
       console.log(`⏳ Retrying in ${delayMs / 1000}s...`);
