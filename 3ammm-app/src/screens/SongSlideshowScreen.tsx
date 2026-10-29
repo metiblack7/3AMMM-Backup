@@ -29,8 +29,6 @@ export interface SongSlideshowProps {
     key: string;
     lyrics: { s: string; t: string }[];
   };
-  songs?: SongSlideshowProps["song"][];
-  onNavigateToSong?: (songId: string) => void;
   onClose: () => void;
 }
 
@@ -64,8 +62,6 @@ const FONT_STEP = 2;
 // ─────────────────────────────────────────────────────────────
 export default function SongSlideshowScreen({
   song,
-  songs = [],
-  onNavigateToSong,
   onClose,
 }: SongSlideshowProps) {
   const totalSlides = song.lyrics.length;
@@ -336,16 +332,6 @@ export default function SongSlideshowScreen({
     showControls();
   }, [goToSlide, showControls, totalSlides]);
 
-  const navigateSong = useCallback(
-    (direction: -1 | 1) => {
-      const songIndex = songs.findIndex((item) => item._id === song._id);
-      const nextSong = songs[songIndex + direction];
-      if (nextSong) onNavigateToSong?.(nextSong._id);
-      showControls();
-    },
-    [onNavigateToSong, showControls, song._id, songs],
-  );
-
   useEffect(() => {
     currentIndexRef.current = 0;
     setCurrentIndex(0);
@@ -368,20 +354,14 @@ export default function SongSlideshowScreen({
 
       switch (event.key) {
         case "ArrowUp":
+        case "ArrowLeft":
           event.preventDefault();
           handlePrev();
           break;
         case "ArrowDown":
-          event.preventDefault();
-          handleNext();
-          break;
-        case "ArrowLeft":
-          event.preventDefault();
-          navigateSong(-1);
-          break;
         case "ArrowRight":
           event.preventDefault();
-          navigateSong(1);
+          handleNext();
           break;
         case "Escape":
         case "f":
@@ -394,7 +374,7 @@ export default function SongSlideshowScreen({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [handleNext, handlePrev, navigateSong, onClose]);
+  }, [handleNext, handlePrev, onClose]);
 
   const handleTap = useCallback(
     (side: "left" | "right" | "center") => {

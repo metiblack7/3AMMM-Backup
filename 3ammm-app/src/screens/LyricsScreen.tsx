@@ -598,26 +598,14 @@ export default function LyricsScreen({
         isEditable(event.target) || isEditable(document.activeElement);
       if (isEditing || event.altKey || event.ctrlKey || event.metaKey) return;
 
-      if (event.key === "ArrowRight") {
-        event.preventDefault();
-        if (canGoNext) goToSong(allSongs[currentIndex + 1]);
-      } else if (event.key === "ArrowLeft") {
-        event.preventDefault();
-        if (canGoPrev) goToSong(allSongs[currentIndex - 1]);
-      } else if (event.key.toLowerCase() === "f") {
-        event.preventDefault();
-        setShowSlideshow(true);
-      }
+      if (event.key.toLowerCase() !== "f") return;
+      event.preventDefault();
+      setShowSlideshow(true);
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [
-    allSongs,
-    canGoNext,
-    canGoPrev,
-    currentIndex,
-    goToSong,
     showSlideshow,
     song,
   ]);
@@ -642,11 +630,6 @@ export default function LyricsScreen({
     return (
       <SongSlideshowScreen
         song={song}
-        songs={allSongs}
-        onNavigateToSong={(songId) => {
-          const nextSong = allSongs.find((item) => item._id === songId);
-          if (nextSong) goToSong(nextSong);
-        }}
         onClose={() => setShowSlideshow(false)}
       />
     );
