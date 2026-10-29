@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { API_URL, logError } from "./env";
+import type { Song } from "./db";
 
 const TOKEN_KEY = "3ammm_token";
 const TIMEOUT_MS = 25000;
@@ -38,7 +39,7 @@ async function fetchWithTimeout(
   } catch (err: any) {
     if (err.name === "AbortError") {
       throw new Error(
-        `Request timed out when reaching ${url}. The server may be waking up — please try again in a moment.`,
+        `Request timed out when reaching ${url}. The server may be waking up ï¿½ please try again in a moment.`,
       );
     }
     const message = `Cannot reach the server at ${url}. Check your internet connection or start the backend on ${API_URL}`;
@@ -189,9 +190,10 @@ export const api = {
   },
 
   songs: {
-    getAll: (params?: Record<string, string>) => {
+    getAll: async (params?: Record<string, string>) => {
       const qs = params ? "?" + new URLSearchParams(params).toString() : "";
-      return apiFetch(`/api/songs${qs}`);
+      const data = await apiFetch(`/api/songs${qs}`);
+      return expectArrayResponse<Song>(data, "Songs");
     },
     getSingers: () => apiFetch("/api/songs/singers"),
     getOne: (id: string) => apiFetch(`/api/songs/${id}`),

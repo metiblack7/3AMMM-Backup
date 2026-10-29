@@ -381,10 +381,10 @@ function SongsTabComponent({
         if (force || cached.length === 0) {
           try {
             const [songsData, singersData] = await Promise.all([
-              api.songs.getAll().catch(() => []),
+              api.songs.getAll(),
               api.songs.getSingers().catch(() => []),
             ]);
-            const normalizedSongs = Array.isArray(songsData) ? songsData : [];
+            const normalizedSongs = songsData;
             const normalizedSingers = Array.isArray(singersData) ? singersData : [];
 
             if (normalizedSongs.length > 0) {

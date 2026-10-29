@@ -26,8 +26,7 @@ Deploy the 3AMMM API from the **`3ammm-server`** folder.
 
 1. Go to [vercel.com/new](https://vercel.com/new)
 2. Import your GitHub repository
-3. **Root Directory:** leave as **`.`** (repo root) — the root `vercel.json` and `api/index.js` route to `3ammm-server`
-   - Alternatively set Root Directory to `3ammm-server` if deploying only the server folder
+3. **Root Directory:** set to **`3ammm-server`** so Vercel uses the API's `vercel.json` and `api/index.js`
 4. **Framework Preset:** Other
 5. **Build Command:** leave empty (do NOT use `react-scripts build`)
 6. Add environment variables:
@@ -64,7 +63,7 @@ vercel --prod
 After deploy, Vercel gives you a URL like `https://3ammm-api.vercel.app`.
 
 ```bash
-curl https://YOUR-PROJECT.vercel.app/health
+curl https://3-ammm-backup.vercel.app/health
 ```
 
 Expected response:
@@ -94,7 +93,7 @@ const API_URLS = {
 Or set at build time via EAS:
 
 ```bash
-EXPO_PUBLIC_API_URL=https://YOUR-PROJECT.vercel.app eas build --platform android
+EXPO_PUBLIC_API_URL=https://3-ammm-backup.vercel.app eas build --platform android
 ```
 
 ---
@@ -131,8 +130,8 @@ The API is live but MongoDB is not connected. Fix:
 
 Test:
 ```bash
-curl https://sabaserver.vercel.app/health
-curl -X POST https://sabaserver.vercel.app/api/auth/login \
+curl https://3-ammm-backup.vercel.app/health
+curl -X POST https://3-ammm-backup.vercel.app/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"admin@3ammm.com","password":"admin123"}'
 ```

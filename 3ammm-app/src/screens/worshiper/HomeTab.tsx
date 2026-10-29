@@ -68,7 +68,7 @@ function HomeTabComponent({
 
     try {
       const [songsData, setlistsData] = await Promise.all([
-        api.songs.getAll().catch(() => []),
+        api.songs.getAll(),
         api.setlists.getAll().catch(() => []),
       ]);
 

@@ -25,7 +25,7 @@ const platformDefaultDevHost = (() => {
 
 const API_URLS = {
   development: process.env.EXPO_PUBLIC_API_URL || platformDefaultDevHost,
-  production: process.env.EXPO_PUBLIC_API_URL || 'https://sabaserver.vercel.app',
+  production: process.env.EXPO_PUBLIC_API_URL || 'https://3-ammm-backup.vercel.app',
 } as const;
 
 export const API_URL = API_URLS[ENV];
