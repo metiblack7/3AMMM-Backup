@@ -15,18 +15,9 @@ import { Feather } from "@expo/vector-icons";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/AppContext";
 import { useTheme } from "../../lib/useTheme";
+import type { Song } from "../../lib/db";
 import { Field, Loader, EmptyState } from "../../components/UI";
 import { Spacing, Radius } from "../../theme";
-
-type Song = {
-  _id: string;
-  title: string;
-  key: string;
-  singerName: string;
-  category: string;
-  tempo: string;
-  lyrics: any[];
-};
 
 type Setlist = {
   _id: string;

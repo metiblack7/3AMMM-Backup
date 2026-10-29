@@ -23,6 +23,7 @@ const configuredAllowedOrigins = (process.env.CORS_ORIGIN || process.env.ALLOWED
 const allowedOrigins = new Set([
   "https://sabaserver.vercel.app",
   "https://sabaserver-197kka0js-metages-amares-projects.vercel.app",
+  "3-ammm-backup.vercel.app",
   "http://localhost:8081",
   "http://localhost:8082",
   "http://localhost:8083",
