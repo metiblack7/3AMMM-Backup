@@ -96,12 +96,6 @@ export function SetlistsTab({ onOpenSong }: SongProps) {
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
-      <GlassHeader
-        title={t.setlists}
-        blurTarget={setlistsBlurTarget}
-        style={styles.floatingGlassHeader}
-      />
-
       <BlurTargetView ref={setlistsBlurTarget} style={styles.scrollTarget}>
         <ScrollView
           style={{ flex: 1 }}
@@ -194,6 +188,11 @@ export function SetlistsTab({ onOpenSong }: SongProps) {
         <View style={{ height: 20 }} />
         </ScrollView>
       </BlurTargetView>
+      <GlassHeader
+        title={t.setlists}
+        blurTarget={setlistsBlurTarget}
+        style={styles.floatingGlassHeader}
+      />
     </View>
   );
 }
@@ -286,14 +285,6 @@ export function FavoritesTab({
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
-      <GlassHeader
-        title={t.favs}
-        onBack={onBackToSongs}
-        backAccessibilityLabel={t.back}
-        blurTarget={favoritesBlurTarget}
-        style={styles.floatingGlassHeader}
-      />
-
       {/* Task 3: plain FlatList, no scroll animation */}
       <BlurTargetView ref={favoritesBlurTarget} style={styles.scrollTarget}>
         <FlatList
@@ -340,6 +331,13 @@ export function FavoritesTab({
           updateCellsBatchingPeriod={50}
         />
       </BlurTargetView>
+      <GlassHeader
+        title={t.favs}
+        onBack={onBackToSongs}
+        backAccessibilityLabel={t.back}
+        blurTarget={favoritesBlurTarget}
+        style={styles.floatingGlassHeader}
+      />
     </View>
   );
 }

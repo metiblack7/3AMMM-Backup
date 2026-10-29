@@ -584,6 +584,44 @@ export default function LyricsScreen({
     goToSong(allSongs[page - 1]);
   }, [allSongs, goToSong, pageQuery, shakePageInput]);
 
+  useEffect(() => {
+    if (Platform.OS !== "web" || showSlideshow || !song || typeof window === "undefined") {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const isEditable = (element: EventTarget | null) =>
+        element instanceof HTMLElement &&
+        (element.isContentEditable ||
+          ["INPUT", "TEXTAREA", "SELECT"].includes(element.tagName));
+      const isEditing =
+        isEditable(event.target) || isEditable(document.activeElement);
+      if (isEditing || event.altKey || event.ctrlKey || event.metaKey) return;
+
+      if (event.key === "ArrowRight") {
+        event.preventDefault();
+        if (canGoNext) goToSong(allSongs[currentIndex + 1]);
+      } else if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        if (canGoPrev) goToSong(allSongs[currentIndex - 1]);
+      } else if (event.key.toLowerCase() === "f") {
+        event.preventDefault();
+        setShowSlideshow(true);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [
+    allSongs,
+    canGoNext,
+    canGoPrev,
+    currentIndex,
+    goToSong,
+    showSlideshow,
+    song,
+  ]);
+
   if (!song) {
     return (
       <View
@@ -604,6 +642,11 @@ export default function LyricsScreen({
     return (
       <SongSlideshowScreen
         song={song}
+        songs={allSongs}
+        onNavigateToSong={(songId) => {
+          const nextSong = allSongs.find((item) => item._id === songId);
+          if (nextSong) goToSong(nextSong);
+        }}
         onClose={() => setShowSlideshow(false)}
       />
     );
@@ -645,6 +688,132 @@ export default function LyricsScreen({
         backgroundColor="transparent"
         translucent
       />
+
+      <View style={s.body} {...swipePan.panHandlers}>
+        <BlurTargetView ref={lyricsBlurTarget} style={s.scroll}>
+          <ScrollView
+            ref={scrollRef}
+            style={s.scroll}
+            contentContainerStyle={[
+              s.lyricsContent,
+              {
+                paddingTop: TOP + (adjustOpen ? 324 : 118),
+                paddingBottom: insets.bottom + 14,
+              },
+            ]}
+            showsVerticalScrollIndicator={false}
+            scrollEventThrottle={16}
+            onScrollBeginDrag={dimFabs}
+            onScrollEndDrag={showFabs}
+            onMomentumScrollBegin={dimFabs}
+            onMomentumScrollEnd={showFabs}>
+            <View style={{ height: 12 }} />
+
+            {song.lyrics.map((section, i) => (
+              <View key={i} style={s.section}>
+                {i > 0 && (
+                  <View
+                    style={{
+                      height: (fontSize ?? 20) * (lineSpacing ?? 1.9) * 2,
+                    }}
+                  />
+                )}
+                <SectionLabel label={section.s} color={LABEL_COLOR} />
+                <Text
+                  style={[
+                    s.lyricsText,
+                    {
+                      color: C.text,
+                      fontSize: fontSize ?? 20,
+                      lineHeight: (fontSize ?? 20) * (lineSpacing ?? 1.9),
+                      fontWeight: boldLyrics ? "600" : "300",
+                    },
+                  ]}>
+                  {section.t}
+                </Text>
+              </View>
+            ))}
+            <View style={{ height: 180 }} />
+          </ScrollView>
+        </BlurTargetView>
+
+        <Animated.View
+          style={[
+            fabStyles.fabContainer,
+            {
+              opacity: fabOpacity,
+              bottom: Platform.OS === "ios" ? 110 : 90,
+              transform: [{ translateY: keyboardLift }],
+            },
+          ]}
+          pointerEvents="box-none">
+          {pageInputVisible && (
+            <Animated.View
+              style={[
+                pageStyles.pageInputBox,
+                {
+                  backgroundColor: C.surface,
+                  borderColor: pageError ? C.danger : (C.skyBorder ?? C.border),
+                  transform: [{ translateX: pageShake }],
+                },
+              ]}>
+              <Feather
+                name="hash"
+                size={16}
+                color={pageError ? C.danger : C.sky}
+                style={{ marginRight: 8 }}
+              />
+              <TextInput
+                ref={pageInputRef}
+                style={[pageStyles.pageInput, { color: C.text }]}
+                value={pageQuery}
+                onChangeText={(v) => {
+                  setPageQuery(v.replace(/[^0-9]/g, ""));
+                  setPageError(false);
+                }}
+                placeholder={
+                  t.songNumberPlaceholder ?? `1-${allSongs.length || 0}`
+                }
+                placeholderTextColor={C.text3}
+                keyboardType="number-pad"
+                returnKeyType="go"
+                maxLength={4}
+                onSubmitEditing={handlePageSearch}
+              />
+              <TouchableOpacity
+                onPress={handlePageSearch}
+                activeOpacity={0.8}
+                style={[pageStyles.goBtn, { backgroundColor: C.sky }]}>
+                <Feather name="arrow-right" size={16} color={C.bg} />
+              </TouchableOpacity>
+              {pageError && (
+                <View
+                  style={[
+                    pageStyles.errorBubble,
+                    { backgroundColor: C.danger },
+                  ]}>
+                  <Text style={pageStyles.errorBubbleText}>
+                    {t.songNotFound ?? "Song not found"}
+                  </Text>
+                </View>
+              )}
+            </Animated.View>
+          )}
+
+          <FAB
+            icon={pageInputVisible ? "x" : "hash"}
+            onPress={togglePageInput}
+            active={pageInputVisible}
+            activeColor={C.sky}
+            btnBase={isDark ? "rgba(5,14,24,0.75)" : "rgba(255,255,255,0.85)"}
+            btnBorder={isDark ? "rgba(255,255,255,0.14)" : "rgba(4,57,84,0.12)"}
+            btnSheen={
+              isDark ? "rgba(255,255,255,0.20)" : "rgba(255,255,255,0.95)"
+            }
+            iconColor={iconColor}
+          />
+        </Animated.View>
+      </View>
 
       <View
         style={[
@@ -914,134 +1083,6 @@ export default function LyricsScreen({
         )}
       </View>
 
-      <View style={s.body} {...swipePan.panHandlers}>
-        <BlurTargetView ref={lyricsBlurTarget} style={s.scroll}>
-          <ScrollView
-            ref={scrollRef}
-            style={s.scroll}
-            contentContainerStyle={[
-              s.lyricsContent,
-              {
-                paddingTop: TOP + (adjustOpen ? 324 : 118),
-                paddingBottom: insets.bottom + 14,
-              },
-            ]}
-            showsVerticalScrollIndicator={false}
-            scrollEventThrottle={16}
-            onScrollBeginDrag={dimFabs}
-            onScrollEndDrag={showFabs}
-            onMomentumScrollBegin={dimFabs}
-            onMomentumScrollEnd={showFabs}>
-          <View style={{ height: 12 }} />
-
-          {song.lyrics.map((section, i) => (
-            <View key={i} style={s.section}>
-              {/* Extra breathing room above the golden bar for every
-                  section after the first — sized to two lyric lines
-                  so it scales correctly with font size / line spacing. */}
-              {i > 0 && (
-                <View
-                  style={{
-                    height: (fontSize ?? 20) * (lineSpacing ?? 1.9) * 2,
-                  }}
-                />
-              )}
-              <SectionLabel label={section.s} color={LABEL_COLOR} />
-              <Text
-                style={[
-                  s.lyricsText,
-                  {
-                    color: C.text,
-                    fontSize: fontSize ?? 20,
-                    lineHeight: (fontSize ?? 20) * (lineSpacing ?? 1.9),
-                    fontWeight: boldLyrics ? "600" : "300",
-                  },
-                ]}>
-                {section.t}
-              </Text>
-            </View>
-          ))}
-          <View style={{ height: 180 }} />
-          </ScrollView>
-        </BlurTargetView>
-
-        <Animated.View
-          style={[
-            fabStyles.fabContainer,
-            {
-              opacity: fabOpacity,
-              bottom: Platform.OS === "ios" ? 110 : 90,
-              transform: [{ translateY: keyboardLift }],
-            },
-          ]}
-          pointerEvents="box-none">
-          {pageInputVisible && (
-            <Animated.View
-              style={[
-                pageStyles.pageInputBox,
-                {
-                  backgroundColor: C.surface,
-                  borderColor: pageError ? C.danger : (C.skyBorder ?? C.border),
-                  transform: [{ translateX: pageShake }],
-                },
-              ]}>
-              <Feather
-                name="hash"
-                size={16}
-                color={pageError ? C.danger : C.sky}
-                style={{ marginRight: 8 }}
-              />
-              <TextInput
-                ref={pageInputRef}
-                style={[pageStyles.pageInput, { color: C.text }]}
-                value={pageQuery}
-                onChangeText={(v) => {
-                  setPageQuery(v.replace(/[^0-9]/g, ""));
-                  setPageError(false);
-                }}
-                placeholder={
-                  t.songNumberPlaceholder ?? `1-${allSongs.length || 0}`
-                }
-                placeholderTextColor={C.text3}
-                keyboardType="number-pad"
-                returnKeyType="go"
-                maxLength={4}
-                onSubmitEditing={handlePageSearch}
-              />
-              <TouchableOpacity
-                onPress={handlePageSearch}
-                activeOpacity={0.8}
-                style={[pageStyles.goBtn, { backgroundColor: C.sky }]}>
-                <Feather name="arrow-right" size={16} color={C.bg} />
-              </TouchableOpacity>
-              {pageError && (
-                <View
-                  style={[
-                    pageStyles.errorBubble,
-                    { backgroundColor: C.danger },
-                  ]}>
-                  <Text style={pageStyles.errorBubbleText}>
-                    {t.songNotFound ?? "Song not found"}
-                  </Text>
-                </View>
-              )}
-            </Animated.View>
-          )}
-
-          <FAB
-            icon={pageInputVisible ? "x" : "hash"}
-            onPress={togglePageInput}
-            active={pageInputVisible}
-            activeColor={C.sky}
-            btnBase={isDark ? "rgba(5,14,24,0.75)" : "rgba(255,255,255,0.85)"}
-            btnBorder={isDark ? "rgba(255,255,255,0.14)" : "rgba(4,57,84,0.12)"}
-            btnSheen={
-              isDark ? "rgba(255,255,255,0.20)" : "rgba(255,255,255,0.95)"
-            }
-            iconColor={iconColor}
-          />
-        </Animated.View>
-      </View>
     </View>
   );
 }
